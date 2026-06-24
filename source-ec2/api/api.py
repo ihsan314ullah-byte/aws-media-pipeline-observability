@@ -62,6 +62,7 @@ def root():
     return {
         "service": "EC2 FFmpeg SRT Source Metrics API",
         "health": "/health",
+        "status": "/status",
         "metrics": "/metrics",
     }
 
@@ -70,6 +71,30 @@ def root():
 def health():
     return {"status": "ok"}
 
+@app.get("/status")
+def status():
+
+    ffmpeg_running = is_ffmpeg_running()
+
+    if ffmpeg_running:
+        bitrate, speed = extract_ffmpeg_metrics()
+    else:
+        bitrate, speed = 0.0, 0.0
+
+    cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'")
+
+    memory = run(
+        "free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'"
+    )
+
+    return {
+        "ffmpeg_running": bool(ffmpeg_running),
+        "ffmpeg_bitrate_kbps": bitrate,
+        "ffmpeg_speed": speed,
+        "cpu_usage_percent": cpu,
+        "memory_usage_percent": memory
+    }
+
 
 @app.get("/metrics", response_class=PlainTextResponse)
 def metrics():
@@ -77,7 +102,11 @@ def metrics():
     memory = run("free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'")
 
     ffmpeg_running = is_ffmpeg_running()
-    bitrate, speed = extract_ffmpeg_metrics()
+
+    if ffmpeg_running:
+        bitrate, speed = extract_ffmpeg_metrics()
+    else:
+        bitrate, speed = 0.0, 0.0
 
     srt_caller_process_active = ffmpeg_running
     

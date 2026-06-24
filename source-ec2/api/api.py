@@ -1,13 +1,16 @@
-from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
-import subprocess
+from pathlib import Path
 import os
 import re
+import subprocess
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 app = FastAPI()
 
 LOG_FILE = "/app/logs/ffmpeg.log"
 PID_FILE = "/app/logs/ffmpeg.pid"
+DASHBOARD_FILE = Path("/app/dashboard.html")
 
 
 def run(cmd):
@@ -57,64 +60,55 @@ def is_ffmpeg_running():
         return 0
 
 
-@app.get("/")
-def root():
+def get_source_status():
+    ffmpeg_running = is_ffmpeg_running()
+
+    if ffmpeg_running:
+        bitrate, speed = extract_ffmpeg_metrics()
+    else:
+        bitrate, speed = 0.0, 0.0
+
+    cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'")
+    memory = run("free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'")
+
     return {
-        "service": "EC2 FFmpeg SRT Source Metrics API",
-        "health": "/health",
-        "status": "/status",
-        "metrics": "/metrics",
+        "ffmpeg_running": bool(ffmpeg_running),
+        "ffmpeg_bitrate_kbps": bitrate,
+        "ffmpeg_speed": speed,
+        "cpu_usage_percent": cpu or "0",
+        "memory_usage_percent": memory or "0",
     }
+
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    if DASHBOARD_FILE.exists():
+        return DASHBOARD_FILE.read_text()
+    return "<h1>Dashboard file not found</h1>"
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
 @app.get("/status")
 def status():
-
-    ffmpeg_running = is_ffmpeg_running()
-
-    if ffmpeg_running:
-        bitrate, speed = extract_ffmpeg_metrics()
-    else:
-        bitrate, speed = 0.0, 0.0
-
-    cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'")
-
-    memory = run(
-        "free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'"
-    )
-
-    return {
-        "ffmpeg_running": bool(ffmpeg_running),
-        "ffmpeg_bitrate_kbps": bitrate,
-        "ffmpeg_speed": speed,
-        "cpu_usage_percent": cpu,
-        "memory_usage_percent": memory
-    }
+    return get_source_status()
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
 def metrics():
-    cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'")
-    memory = run("free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'")
+    data = get_source_status()
 
-    ffmpeg_running = is_ffmpeg_running()
-
-    if ffmpeg_running:
-        bitrate, speed = extract_ffmpeg_metrics()
-    else:
-        bitrate, speed = 0.0, 0.0
-
+    ffmpeg_running = 1 if data["ffmpeg_running"] else 0
     srt_caller_process_active = ffmpeg_running
-    
+
     return (
-        f"cpu_usage_percent {cpu or 0}\n"
-        f"memory_usage_percent {memory or 0}\n"
+        f"cpu_usage_percent {data['cpu_usage_percent']}\n"
+        f"memory_usage_percent {data['memory_usage_percent']}\n"
         f"ffmpeg_running {ffmpeg_running}\n"
-        f"ffmpeg_bitrate_kbps {bitrate}\n"
-        f"ffmpeg_speed {speed}\n"
+        f"ffmpeg_bitrate_kbps {data['ffmpeg_bitrate_kbps']}\n"
+        f"ffmpeg_speed {data['ffmpeg_speed']}\n"
         f"srt_caller_process_active {srt_caller_process_active}\n"
     )

@@ -1,83 +1,49 @@
 #!/bin/bash
+set -euo pipefail
 
-# ------------------------------------------------------------
-# STREAMING SYSTEM STATUS SCRIPT
-# ------------------------------------------------------------
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Path to FFmpeg PID file
-PID_FILE=/home/ubuntu/streaming-demo/logs/ffmpeg.pid
-
+PID_FILE="$BASE_DIR/logs/ffmpeg.pid"
+LOG_FILE="$BASE_DIR/logs/ffmpeg.log"
 
 echo "================================="
 echo "STREAMING PIPELINE STATUS"
 echo "================================="
 
-
-# ------------------------------------------------------------
-# FFmpeg STATUS CHECK
-# ------------------------------------------------------------
 echo ""
 echo "[FFMPEG]"
 
-# If PID file exists, we assume FFmpeg is running
 if [ -f "$PID_FILE" ]; then
-    PID=$(cat "$PID_FILE")
-    echo "Status: RUNNING"
-    echo "PID: $PID"
+    PID="$(cat "$PID_FILE" || true)"
+
+    if [ -n "$PID" ] && ps -p "$PID" > /dev/null; then
+        echo "Status: RUNNING"
+        echo "PID: $PID"
+        ps -p "$PID" -o pid,ppid,etime,%cpu,%mem,cmd
+    else
+        echo "Status: STALE PID FILE"
+        echo "PID in file: $PID"
+    fi
 else
     echo "Status: NOT RUNNING"
 fi
 
-
-# ------------------------------------------------------------
-# CPU USAGE
-# ------------------------------------------------------------
 echo ""
 echo "[CPU]"
-
-# top snapshot, extract CPU usage
 CPU=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
 echo "Usage: $CPU %"
 
-
-# ------------------------------------------------------------
-# MEMORY USAGE
-# ------------------------------------------------------------
 echo ""
 echo "[MEMORY]"
-
-# free memory calculation
 free -m | awk 'NR==2{
     printf "Used: %s MB / %s MB (%.2f%%)\n", $3, $2, $3*100/$2
 }'
 
-
-# ------------------------------------------------------------
-# DISK USAGE
-# ------------------------------------------------------------
 echo ""
 echo "[DISK]"
-
 df -h / | awk 'NR==2{
     print "Used:", $3, "/", $2, "(", $5 ")"
 }'
-
-
-# ------------------------------------------------------------
-# NETWORK CHECK
-# ------------------------------------------------------------
-echo ""
-echo "[NETWORK]"
-
-# simple connectivity test using Google DNS
-curl -s https://www.google.com > /dev/null
-
-if [ $? -eq 0 ]; then
-    echo "Internet: OK"
-else
-    echo "Internet: DOWN"
-fi
-
 
 echo ""
 echo "================================="

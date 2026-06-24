@@ -1,32 +1,60 @@
 #!/bin/bash
+set -euo pipefail
 
-# ------------------------------------------------------------
-# STOP FFmpeg SRT Caller STREAMING PROCESS
-# ------------------------------------------------------------
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-PID_FILE=/home/ubuntu/streaming-demo/logs/ffmpeg.pid
+LOG_DIR="$BASE_DIR/logs"
+PID_FILE="$LOG_DIR/ffmpeg.pid"
+LOCK_FILE="$LOG_DIR/ffmpeg.lock"
 
+mkdir -p "$LOG_DIR"
 
-# Check if PID file exists
-if [ -f "$PID_FILE" ]; then
+if [ ! -f "$PID_FILE" ]; then
+    echo "No FFmpeg PID file found."
 
-    PID=$(cat "$PID_FILE")
+    RUNNING_PIDS="$(pgrep -f "ffmpeg.*srt://" || true)"
+    if [ -n "$RUNNING_PIDS" ]; then
+        echo "Found FFmpeg SRT processes without PID file:"
+        echo "$RUNNING_PIDS"
+        echo "Stopping them..."
+        pkill -TERM -f "ffmpeg.*srt://" || true
+        sleep 3
+        pkill -KILL -f "ffmpeg.*srt://" || true
+    fi
 
-    echo "Stopping FFmpeg PID $PID"
-
-    # Kill process
-    kill "$PID"
-
-    # Wait until process fully stops
-    while ps -p "$PID" > /dev/null; do
-        sleep 1
-    done
-
-    # Remove PID file after stopping
-    rm "$PID_FILE"
-
-    echo "FFmpeg stopped"
-
-else
-    echo "No FFmpeg PID found"
+    rm -f "$LOCK_FILE"
+    exit 0
 fi
+
+PID="$(cat "$PID_FILE" || true)"
+
+if [ -z "$PID" ]; then
+    echo "PID file is empty. Cleaning up."
+    rm -f "$PID_FILE" "$LOCK_FILE"
+    exit 0
+fi
+
+if ! ps -p "$PID" > /dev/null; then
+    echo "FFmpeg PID $PID is not running. Cleaning stale PID file."
+    rm -f "$PID_FILE" "$LOCK_FILE"
+    exit 0
+fi
+
+echo "Stopping FFmpeg PID $PID gracefully..."
+kill -TERM "$PID" || true
+
+for i in {1..10}; do
+    if ! ps -p "$PID" > /dev/null; then
+        echo "FFmpeg stopped gracefully."
+        rm -f "$PID_FILE" "$LOCK_FILE"
+        exit 0
+    fi
+    sleep 1
+done
+
+echo "FFmpeg did not stop after 10 seconds. Force killing..."
+kill -KILL "$PID" || true
+sleep 1
+
+rm -f "$PID_FILE" "$LOCK_FILE"
+echo "FFmpeg stopped."

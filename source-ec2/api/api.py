@@ -79,13 +79,13 @@ def metrics():
     ffmpeg_running = is_ffmpeg_running()
     bitrate, speed = extract_ffmpeg_metrics()
 
-    srt_active = 1 if run("ss -anu | grep ':5000'") else 0
-
+    srt_caller_process_active = ffmpeg_running
+    
     return (
         f"cpu_usage_percent {cpu or 0}\n"
         f"memory_usage_percent {memory or 0}\n"
         f"ffmpeg_running {ffmpeg_running}\n"
         f"ffmpeg_bitrate_kbps {bitrate}\n"
         f"ffmpeg_speed {speed}\n"
-        f"srt_active {srt_active}\n"
+        f"srt_caller_process_active {srt_caller_process_active}\n"
     )

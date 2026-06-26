@@ -2,272 +2,354 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AWS Media Pipeline Observability</title>
+  <title>Dashboard for AWS Media Pipeline</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: #e5e7eb;
+      background: #eef2f7;
+      color: #1f2937;
       margin: 0;
-      padding: 28px;
+      padding: 24px;
     }
 
     .hero {
-      text-align: center;
-      padding: 30px 18px;
-      margin-bottom: 24px;
+      background: linear-gradient(135deg, #0f172a, #1e3a8a, #2563eb);
+      color: white;
+      padding: 34px 28px;
       border-radius: 18px;
-      background: linear-gradient(135deg, #1e3a8a, #0f172a);
-      border: 1px solid #334155;
-      box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+      margin-bottom: 24px;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.25);
+      text-align: center;
     }
 
     .hero h1 {
-      margin: 0 0 10px 0;
-      color: #f8fafc;
-      font-size: 34px;
+      font-size: 36px;
+      margin: 0 0 6px 0;
+    }
+
+    .hero h2 {
+      font-size: 23px;
+      font-weight: 500;
+      margin: 0 0 14px 0;
+      color: #dbeafe;
     }
 
     .hero p {
+      font-size: 15px;
+      color: #eff6ff;
+      line-height: 1.6;
       margin: 0;
-      color: #bfdbfe;
-      font-size: 16px;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
       gap: 18px;
     }
 
     .card {
-      background: #111827;
-      border: 1px solid #1f2937;
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+      border: 1px solid #e5e7eb;
     }
 
     .card h2 {
       margin-top: 0;
-      font-size: 20px;
-      color: #f8fafc;
+      font-size: 18px;
+      color: #111827;
     }
 
-    .section-title {
-      margin-top: 14px;
-      color: #93c5fd;
-      font-weight: bold;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-    }
-
-    td {
-      padding: 10px 6px;
-      border-bottom: 1px solid #1f2937;
-    }
-
-    td:first-child {
-      color: #94a3b8;
-    }
-
-    td:last-child {
-      text-align: right;
-      font-weight: bold;
-    }
-
-    .status-running { color: #22c55e; }
-    .status-stopped { color: #ef4444; }
-
-    button, a.button {
+    button {
       display: inline-block;
-      background: #2563eb;
-      color: white;
+      margin: 6px 6px 6px 0;
+      padding: 10px 14px;
       border: none;
       border-radius: 8px;
-      padding: 10px 14px;
-      margin: 6px 6px 6px 0;
+      background: #2563eb;
+      color: white;
       cursor: pointer;
-      text-decoration: none;
       font-size: 14px;
+      font-weight: 600;
     }
 
-    button:hover, a.button:hover {
+    button:hover {
       background: #1d4ed8;
     }
 
-    .danger { background: #dc2626; }
-    .danger:hover { background: #b91c1c; }
+    button.danger {
+      background: #dc2626;
+    }
 
-    .output {
-      background: #020617;
-      border: 1px solid #1f2937;
+    button.danger:hover {
+      background: #b91c1c;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px;
+      margin: 8px 0 12px 0;
+      border: 1px solid #cbd5e1;
       border-radius: 8px;
-      padding: 12px;
-      margin-top: 12px;
+      box-sizing: border-box;
+    }
+
+    pre {
+      background: #111827;
+      color: #e5e7eb;
+      padding: 14px;
+      border-radius: 10px;
+      overflow-x: auto;
       white-space: pre-wrap;
-      font-family: monospace;
       font-size: 13px;
-      max-height: 260px;
-      overflow: auto;
+    }
+
+    .message {
+      margin-top: 22px;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 14px;
+      border-radius: 10px;
+      min-height: 48px;
+      white-space: pre-wrap;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
     }
 
     .small {
-      color: #94a3b8;
       font-size: 13px;
-      line-height: 1.4;
+      color: #555;
+      line-height: 1.5;
+    }
+
+    .warning {
+      background: #fff7ed;
+      color: #9a3412;
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 4px solid #f97316;
     }
   </style>
 </head>
+
 <body>
-  <div class="hero">
-  	<h1>AWS Media Pipeline</h1>
-
-	<p/class="tagline">
-    		End-to-end Live Streaming Pipeline
-	</p>
-
-	<p class="architecture">
-    	Architecture:
-    	FFmpeg (SRT-Caller) → MediaConnect (SRT-Listener) → MediaLive → MediaPackage → HLS/DASH (ABR)
-	</p>
-  </div>
+  <header class="hero">
+    <h1>Dashboard for AWS Media Pipeline</h1>
+    <h2>End-to-end Live Streaming</h2>
+    <p>
+      Architecture:
+      <strong>FFmpeg (SRT-Caller)</strong> →
+      <strong>MediaConnect (SRT-Listener)</strong> →
+      <strong>MediaLive</strong> →
+      <strong>MediaPackage</strong> →
+      <strong>HLS/DASH (ABR)</strong>
+    </p>
+  </header>
 
   <div class="grid">
+
     <div class="card">
       <h2>Host Source EC2 Metrics</h2>
-
-      <div class="section-title">EC2 Metrics</div>
-      <table>
-        <tr><td>CPU Usage</td><td id="cpu">Loading...</td></tr>
-        <tr><td>Memory Usage</td><td id="memory">Loading...</td></tr>
-      </table>
-
-      <div class="section-title">FFmpeg / SRT Metrics</div>
-      <table>
-        <tr><td>FFmpeg Status</td><td id="ffmpegStatus">Loading...</td></tr>
-        <tr><td>SRT Caller Active</td><td id="srtCallerActive">Loading...</td></tr>
-        <tr><td>Bitrate</td><td id="bitrate">Loading...</td></tr>
-        <tr><td>Speed</td><td id="speed">Loading...</td></tr>
-      </table>
+      <button onclick="loadStatus()">Refresh Status</button>
+      <pre id="statusBox">Click Refresh Status to load current EC2/FFmpeg status.</pre>
     </div>
 
     <div class="card">
       <h2>FFmpeg / SRT Control</h2>
+      <p class="small warning">JWT required: protected controls start and stop host-managed FFmpeg.</p>
+
+      <input
+        id="jwtToken"
+        type="password"
+        placeholder="Paste JWT token here"
+        autocomplete="off"
+      />
+
       <button onclick="startFfmpeg()">Start FFmpeg</button>
       <button class="danger" onclick="stopFfmpeg()">Stop FFmpeg</button>
-      <div id="controlOutput" class="output">Start/stop output will appear here.</div>
+      <button onclick="loadFfmpegStatus()">FFmpeg Status</button>
     </div>
 
     <div class="card">
       <h2>Monitoring Links</h2>
-      <a class="button" href="/status" target="_blank">Status API</a>
-      <a class="button" href="/metrics" target="_blank">Metrics API</a>
-      <a id="prometheusLink" class="button" href="#" target="_blank">Prometheus</a>
-      <a id="grafanaLink" class="button" href="#" target="_blank">Grafana</a>
-      <p class="small">
-        Future phase: add CloudWatch metrics for MediaConnect, MediaLive, and MediaPackage into Grafana.
+      <p class="small warning">
+        JWT required: these dashboard buttons require the same token before opening Prometheus, Grafana, or metrics.
       </p>
+      <button onclick="openProtectedLink('/metrics', 'Prometheus Metrics')">Open Prometheus Metrics</button>
+      <button onclick="openProtectedLink('http://' + window.location.hostname + ':9090', 'Prometheus')">Open Prometheus</button>
+      <button onclick="openProtectedLink('http://' + window.location.hostname + ':3000', 'Grafana')">Open Grafana</button>
     </div>
 
     <div class="card">
       <h2>ABR Playback Endpoints</h2>
-      <a id="hlsPlayerLink" class="button" href="#" target="_blank">Open HLS in hls.js Player</a>
-      <a id="dashPlayerLink" class="button" href="#" target="_blank">Open DASH in DASH-IF Player</a>
-      <br />
-      <p class="small">
-        Future phase: embed an HLS/DASH player directly on this dashboard and show a “Media Pipeline Offline” slate when the stream is stopped.
+      <p class="small warning">
+        JWT required: these buttons read protected runtime config before opening HLS/DASH players.
       </p>
+      <button onclick="openHlsPlayer()">Open HLS in hls.js Player</button>
+      <button onclick="openDashPlayer()">Open DASH in DASH-IF Player</button>
     </div>
+
   </div>
 
+  <div class="message" id="messageBox">Ready.</div>
+
   <script>
-    async function getJson(url, options = {}) {
-      const response = await fetch(url, options);
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return await response.json();
+    function setMessage(message) {
+      document.getElementById("messageBox").textContent = message;
     }
 
-    function setText(id, value) {
-      document.getElementById(id).textContent = value;
+    function getToken() {
+      return document.getElementById("jwtToken").value.trim();
     }
 
-    function setStatus(isRunning) {
-      const ffmpeg = document.getElementById("ffmpegStatus");
-      ffmpeg.textContent = isRunning ? "RUNNING" : "STOPPED";
-      ffmpeg.className = isRunning ? "status-running" : "status-stopped";
+    function getAuthHeaders() {
+      const token = getToken();
 
-      const srt = document.getElementById("srtCallerActive");
-      srt.textContent = isRunning ? "ON" : "OFF";
-      srt.className = isRunning ? "status-running" : "status-stopped";
+      if (!token) {
+        setMessage("Unauthorized: JWT token is missing.");
+        throw new Error("JWT token is missing");
+      }
+
+      return {
+        "Authorization": `Bearer ${token}`
+      };
     }
 
-    async function refreshStatus() {
+    async function handleJsonResponse(response, successPrefix) {
+      let bodyText = await response.text();
+      let parsed;
+
       try {
-        const data = await getJson("/status");
-        setStatus(data.ffmpeg_running);
-        setText("bitrate", `${Number(data.ffmpeg_bitrate_kbps).toFixed(1)} kbps`);
-        setText("speed", `${Number(data.ffmpeg_speed).toFixed(2)}x`);
-        setText("cpu", `${data.cpu_usage_percent}%`);
-        setText("memory", `${data.memory_usage_percent}%`);
-      } catch (err) {
-        document.getElementById("controlOutput").textContent = `Status refresh failed: ${err}`;
+        parsed = JSON.parse(bodyText);
+      } catch {
+        parsed = bodyText;
+      }
+
+      if (!response.ok) {
+        const details = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+        throw new Error(`${response.status} ${response.statusText}\n${details}`);
+      }
+
+      setMessage(`${successPrefix}\n${typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2)}`);
+      return parsed;
+    }
+
+    async function loadStatus() {
+      try {
+        const response = await fetch("/status");
+        const data = await response.json();
+        document.getElementById("statusBox").textContent = JSON.stringify(data, null, 2);
+        setMessage("Status refreshed successfully.");
+      } catch (error) {
+        setMessage(`Status failed: ${error.message}`);
       }
     }
 
-    async function loadRuntimeConfig() {
+    async function loadFfmpegStatus() {
       try {
-        const host = window.location.hostname;
-        document.getElementById("prometheusLink").href = `http://${host}:9090`;
-        document.getElementById("grafanaLink").href = `http://${host}:3000`;
-
-        const config = await getJson("/runtime-config");
-
-        if (config.hls_url) {
-          document.getElementById("hlsPlayerLink").href =
-            `https://hlsjs.video-dev.org/demo/?src=${encodeURIComponent(config.hls_url)}`;
-        }
-
-        if (config.dash_url) {
-          document.getElementById("dashPlayerLink").href =
-            `https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=${config.dash_url}`;
-        }
-      } catch (err) {
-        document.getElementById("controlOutput").textContent = `Runtime config load failed: ${err}`;
+        const response = await fetch("/ffmpeg/status");
+        const data = await response.json();
+        setMessage(`FFmpeg status:\n${JSON.stringify(data, null, 2)}`);
+      } catch (error) {
+        setMessage(`FFmpeg status failed: ${error.message}`);
       }
     }
 
     async function startFfmpeg() {
-      const output = document.getElementById("controlOutput");
-      output.textContent = "Starting FFmpeg...";
       try {
-        const data = await getJson("/ffmpeg/start", { method: "POST" });
-        output.textContent = JSON.stringify(data, null, 2);
-        await refreshStatus();
-      } catch (err) {
-        output.textContent = `Start failed: ${err}`;
+        const response = await fetch("/ffmpeg/start", {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+
+        await handleJsonResponse(response, "Start request completed:");
+      } catch (error) {
+        setMessage(`Start failed: ${error.message}`);
       }
     }
 
     async function stopFfmpeg() {
-      const output = document.getElementById("controlOutput");
-      output.textContent = "Stopping FFmpeg...";
       try {
-        const data = await getJson("/ffmpeg/stop", { method: "POST" });
-        output.textContent = JSON.stringify(data, null, 2);
-        await refreshStatus();
-      } catch (err) {
-        output.textContent = `Stop failed: ${err}`;
+        const response = await fetch("/ffmpeg/stop", {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+
+        await handleJsonResponse(response, "Stop request completed:");
+      } catch (error) {
+        setMessage(`Stop failed: ${error.message}`);
       }
     }
 
-    loadRuntimeConfig();
-    refreshStatus();
-    setInterval(refreshStatus, 5000);
+    function openProtectedLink(url, label) {
+      try {
+        getAuthHeaders();
+        setMessage(`Authorized. Opening ${label}:\n${url}`);
+        window.open(url, "_blank");
+      } catch (error) {
+        setMessage(`${label} failed: ${error.message}`);
+      }
+    }
+
+    async function getRuntimeConfig() {
+      const response = await fetch("/runtime-config", {
+        headers: getAuthHeaders()
+      });
+
+      let bodyText = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(bodyText);
+      } catch {
+        data = bodyText;
+      }
+
+      if (!response.ok) {
+        const details = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        throw new Error(`${response.status} ${response.statusText}\n${details}`);
+      }
+
+      return data;
+    }
+
+    async function openHlsPlayer() {
+      try {
+        const config = await getRuntimeConfig();
+        const hlsUrl = config.hls_url || config.HLS_URL;
+
+        if (!hlsUrl) {
+          setMessage("HLS URL is missing from runtime config.");
+          return;
+        }
+
+        const playerUrl = `https://hlsjs.video-dev.org/demo/?src=${encodeURIComponent(hlsUrl)}`;
+        setMessage(`Opening HLS player:\n${playerUrl}`);
+        window.open(playerUrl, "_blank");
+      } catch (error) {
+        setMessage(`HLS player failed: ${error.message}`);
+      }
+    }
+
+    async function openDashPlayer() {
+      try {
+        const config = await getRuntimeConfig();
+        const dashUrl = config.dash_url || config.DASH_URL;
+
+        if (!dashUrl) {
+          setMessage("DASH URL is missing from runtime config.");
+          return;
+        }
+
+        const playerUrl = `https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=${encodeURIComponent(dashUrl)}`;
+        setMessage(`Opening DASH player:\n${playerUrl}`);
+        window.open(playerUrl, "_blank");
+      } catch (error) {
+        setMessage(`DASH player failed: ${error.message}`);
+      }
+    }
+
+    loadStatus();
   </script>
 </body>
 </html>

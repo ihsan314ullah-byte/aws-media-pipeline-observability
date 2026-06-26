@@ -1,3 +1,4 @@
 fastapi
 uvicorn
-prometheus_client
+psutil
+PyJWT==2.10.1

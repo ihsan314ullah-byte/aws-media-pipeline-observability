@@ -1,255 +1,303 @@
-from pathlib import Path
 import os
 import re
 import subprocess
+from pathlib import Path
+from typing import Any, Dict
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, PlainTextResponse
-
-app = FastAPI()
-
-LOG_FILE = "/app/logs/ffmpeg.log"
-PID_FILE = "/app/logs/ffmpeg.pid"
-DASHBOARD_FILE = Path("/app/dashboard.html")
-
-START_SCRIPT = "/app/scripts/start_ffmpeg.sh"
-STOP_SCRIPT = "/app/scripts/stop_ffmpeg.sh"
-STATUS_SCRIPT = "/app/scripts/status.sh"
+import jwt
+import psutil
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse
 
 
-def load_env_file(path="/app/.env"):
-    if not os.path.exists(path):
-        return
+app = FastAPI(title="AWS Media Pipeline Observability API")
 
-    with open(path, "r", errors="ignore") as f:
-        for line in f:
-            line = line.strip()
+BASE_DIR = Path(__file__).resolve().parent
+DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 
-            if not line or line.startswith("#") or "=" not in line:
-                continue
+HOST_PROJECT_DIR = os.getenv(
+    "HOST_PROJECT_DIR",
+    "/home/ubuntu/aws-media-pipeline-observability/source-ec2"
+)
 
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip())
+LOG_FILE = Path("/app/logs/ffmpeg.log")
 
+START_SCRIPT = f"{HOST_PROJECT_DIR}/scripts/start_ffmpeg.sh"
+STOP_SCRIPT = f"{HOST_PROJECT_DIR}/scripts/stop_ffmpeg.sh"
+STATUS_SCRIPT = f"{HOST_PROJECT_DIR}/scripts/status.sh"
 
-load_env_file()
-
-
-def run(cmd):
-    try:
-        return subprocess.getoutput(cmd).strip()
-    except Exception:
-        return ""
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_ALGORITHM = "HS256"
 
 
-def extract_ffmpeg_metrics():
-    bitrate = 0.0
-    speed = 0.0
+def verify_jwt_authorization(authorization: str = Header(default="")) -> Dict[str, Any]:
+    if not JWT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="JWT_SECRET is not configured on the server"
+        )
 
-    if not os.path.exists(LOG_FILE):
-        return bitrate, speed
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid Authorization header"
+        )
+
+    token = authorization.replace("Bearer ", "", 1).strip()
 
     try:
-        with open(LOG_FILE, "r", errors="ignore") as f:
-            log = f.read()
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
-        bitrate_matches = re.findall(r"bitrate=\s*([\d\.]+)\s*kbits/s", log)
-        if bitrate_matches:
-            bitrate = float(bitrate_matches[-1])
+        if payload.get("role") != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Administrator privileges required"
+            )
 
-        speed_matches = re.findall(r"speed=\s*([\d\.]+)x", log)
-        if speed_matches:
-            speed = float(speed_matches[-1])
+        return payload
 
-    except Exception:
-        pass
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
 
-    return bitrate, speed
-
-
-def is_ffmpeg_running():
-    if not os.path.exists(PID_FILE):
-        return 0
-
-    try:
-        with open(PID_FILE, "r") as f:
-            pid = f.read().strip()
-
-        if not pid.isdigit():
-            return 0
-
-        stat_file = f"/proc/{pid}/stat"
-
-        if not os.path.exists(stat_file):
-            return 0
-
-        with open(stat_file, "r", errors="ignore") as f:
-            stat = f.read()
-
-        parts = stat.split()
-
-        if len(parts) > 2 and parts[2] == "Z":
-            return 0
-
-        cmdline_file = f"/proc/{pid}/cmdline"
-
-        if os.path.exists(cmdline_file):
-            with open(cmdline_file, "r", errors="ignore") as f:
-                cmdline = f.read().replace("\x00", " ")
-
-            if "ffmpeg" in cmdline:
-                return 1
-
-        return 0
-
-    except Exception:
-        return 0
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
-def get_source_status():
-    ffmpeg_running = is_ffmpeg_running()
+def run_host_script(script_path: str) -> Dict[str, Any]:
+    command = [
+        "nsenter",
+        "--target",
+        "1",
+        "--mount",
+        "--uts",
+        "--ipc",
+        "--net",
+        "--pid",
+        "bash",
+        script_path
+    ]
 
-    if ffmpeg_running:
-        bitrate, speed = extract_ffmpeg_metrics()
-    else:
-        bitrate, speed = 0.0, 0.0
-
-    cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'")
-    memory = run("free -m | awk 'NR==2{printf \"%.2f\", $3*100/$2}'")
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=30
+    )
 
     return {
-        "ffmpeg_running": bool(ffmpeg_running),
-        "ffmpeg_bitrate_kbps": bitrate,
-        "ffmpeg_speed": speed,
-        "cpu_usage_percent": cpu or "0",
-        "memory_usage_percent": memory or "0",
+        "returncode": result.returncode,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip()
     }
 
 
-def run_script(script_path, timeout_seconds=20):
+def load_dotenv_file() -> Dict[str, str]:
+    env_file = Path("/app/.env")
+    config = {}
+
+    if not env_file.exists():
+        return config
+
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        config[key.strip()] = value.strip().strip('"').strip("'")
+
+    return config
+
+
+def is_ffmpeg_running() -> int:
+    for proc in psutil.process_iter(["name", "cmdline"]):
+        try:
+            name = proc.info.get("name") or ""
+            cmdline = " ".join(proc.info.get("cmdline") or [])
+
+            if "ffmpeg" in name.lower() or "ffmpeg" in cmdline.lower():
+                return 1
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    return 0
+
+
+def parse_ffmpeg_log() -> Dict[str, float]:
+    bitrate_kbps = 0.0
+    speed = 0.0
+
+    if not LOG_FILE.exists():
+        return {
+            "ffmpeg_bitrate_kbps": bitrate_kbps,
+            "ffmpeg_speed": speed
+        }
+
     try:
-        host_project_dir = os.getenv(
-            "HOST_PROJECT_DIR",
-            "/home/ubuntu/aws-media-pipeline-observability/source-ec2",
-        )
+        lines = LOG_FILE.read_text(errors="ignore").splitlines()[-80:]
 
-        script_name = os.path.basename(script_path)
-        host_script = f"{host_project_dir}/scripts/{script_name}"
-
-        result = subprocess.run(
-            [
-                "nsenter",
-                "--target",
-                "1",
-                "--mount",
-                "--uts",
-                "--ipc",
-                "--net",
-                "--pid",
-                "--",
-                "bash",
-                "-lc",
-                f"cd {host_project_dir} && {host_script}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-        )
-
+    except Exception:
         return {
-            "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "timed_out": False,
+            "ffmpeg_bitrate_kbps": bitrate_kbps,
+            "ffmpeg_speed": speed
         }
 
-    except subprocess.TimeoutExpired as e:
-        return {
-            "returncode": 124,
-            "stdout": e.stdout or "",
-            "stderr": e.stderr or "Command timed out",
-            "timed_out": True,
-        }
+    for line in reversed(lines):
+        bitrate_match = re.search(r"bitrate=\s*([\d.]+)kbits/s", line)
+        speed_match = re.search(r"speed=\s*([\d.]+)x", line)
 
-    except Exception as e:
-        return {
-            "returncode": 1,
-            "stdout": "",
-            "stderr": str(e),
-            "timed_out": False,
-        }
+        if bitrate_match and bitrate_kbps == 0.0:
+            bitrate_kbps = float(bitrate_match.group(1))
+
+        if speed_match and speed == 0.0:
+            speed = float(speed_match.group(1))
+
+        if bitrate_kbps and speed:
+            break
+
+    if not is_ffmpeg_running():
+        bitrate_kbps = 0.0
+        speed = 0.0
+
+    return {
+        "ffmpeg_bitrate_kbps": bitrate_kbps,
+        "ffmpeg_speed": speed
+    }
 
 
-@app.get("/", response_class=HTMLResponse)
+def get_status_payload() -> Dict[str, Any]:
+    log_metrics = parse_ffmpeg_log()
+
+    return {
+        "service": "aws-media-pipeline-observability",
+        "ffmpeg_running": is_ffmpeg_running(),
+        "ffmpeg_bitrate_kbps": log_metrics["ffmpeg_bitrate_kbps"],
+        "ffmpeg_speed": log_metrics["ffmpeg_speed"],
+        "cpu_usage_percent": psutil.cpu_percent(interval=0.2),
+        "memory_usage_percent": psutil.virtual_memory().percent
+    }
+
+
+@app.get("/")
 def root():
-    if DASHBOARD_FILE.exists():
-        return DASHBOARD_FILE.read_text()
-    return "<h1>Dashboard file not found</h1>"
+    if not DASHBOARD_FILE.exists():
+        raise HTTPException(status_code=404, detail="dashboard.html not found")
+
+    return FileResponse(DASHBOARD_FILE)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "healthy"
+    }
+
+
+@app.get("/dashboard")
+def dashboard():
+    if not DASHBOARD_FILE.exists():
+        raise HTTPException(status_code=404, detail="dashboard.html not found")
+
+    return FileResponse(DASHBOARD_FILE)
 
 
 @app.get("/status")
 def status():
-    return get_source_status()
+    return get_status_payload()
+
+
+@app.get("/ffmpeg/status")
+def ffmpeg_status():
+    result = run_host_script(STATUS_SCRIPT)
+
+    return {
+        "script": "status.sh",
+        "returncode": result["returncode"],
+        "stdout": result["stdout"],
+        "stderr": result["stderr"]
+    }
+
+
+@app.post("/ffmpeg/start")
+def start_ffmpeg(auth: Dict[str, Any] = Depends(verify_jwt_authorization)):
+    result = run_host_script(START_SCRIPT)
+
+    if result["returncode"] != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=result
+        )
+
+    return {
+        "message": "FFmpeg start command executed",
+        "auth_subject": auth.get("sub"),
+        "auth_role": auth.get("role"),
+        "result": result
+    }
+
+
+@app.post("/ffmpeg/stop")
+def stop_ffmpeg(auth: Dict[str, Any] = Depends(verify_jwt_authorization)):
+    result = run_host_script(STOP_SCRIPT)
+
+    if result["returncode"] != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=result
+        )
+
+    return {
+        "message": "FFmpeg stop command executed",
+        "auth_subject": auth.get("sub"),
+        "auth_role": auth.get("role"),
+        "result": result
+    }
 
 
 @app.get("/runtime-config")
-def runtime_config():
+def runtime_config(auth: Dict[str, Any] = Depends(verify_jwt_authorization)):
+    config = load_dotenv_file()
+
     return {
-        "hls_url": os.getenv("HLS_URL", ""),
-        "dash_url": os.getenv("DASH_URL", ""),
+        "srt_target_ip": config.get("SRT_TARGET_IP", ""),
+        "srt_target_port": config.get("SRT_TARGET_PORT", ""),
+        "srt_latency_ms": config.get("SRT_LATENCY_MS", ""),
+        "hls_url": config.get("HLS_URL", ""),
+        "dash_url": config.get("DASH_URL", ""),
+        "auth_subject": auth.get("sub"),
+        "auth_role": auth.get("role")
     }
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
 def metrics():
-    data = get_source_status()
+    payload = get_status_payload()
 
-    ffmpeg_running = 1 if data["ffmpeg_running"] else 0
-    srt_caller_process_active = ffmpeg_running
+    metrics_text = f"""# HELP cpu_usage_percent Host CPU usage percentage
+# TYPE cpu_usage_percent gauge
+cpu_usage_percent {payload["cpu_usage_percent"]}
 
-    return (
-        f"cpu_usage_percent {data['cpu_usage_percent']}\n"
-        f"memory_usage_percent {data['memory_usage_percent']}\n"
-        f"ffmpeg_running {ffmpeg_running}\n"
-        f"ffmpeg_bitrate_kbps {data['ffmpeg_bitrate_kbps']}\n"
-        f"ffmpeg_speed {data['ffmpeg_speed']}\n"
-        f"srt_caller_process_active {srt_caller_process_active}\n"
-    )
+# HELP memory_usage_percent Host memory usage percentage
+# TYPE memory_usage_percent gauge
+memory_usage_percent {payload["memory_usage_percent"]}
 
+# HELP ffmpeg_running Whether FFmpeg is running on the host
+# TYPE ffmpeg_running gauge
+ffmpeg_running {payload["ffmpeg_running"]}
 
-@app.post("/ffmpeg/start")
-def ffmpeg_start():
-    result = run_script(START_SCRIPT, timeout_seconds=20)
+# HELP ffmpeg_bitrate_kbps FFmpeg output bitrate in kbps
+# TYPE ffmpeg_bitrate_kbps gauge
+ffmpeg_bitrate_kbps {payload["ffmpeg_bitrate_kbps"]}
 
-    return {
-        "action": "start",
-        **result,
-        "status": get_source_status(),
-    }
+# HELP ffmpeg_speed FFmpeg encoding speed multiplier
+# TYPE ffmpeg_speed gauge
+ffmpeg_speed {payload["ffmpeg_speed"]}
 
+# HELP srt_caller_process_active Whether the SRT caller process is active
+# TYPE srt_caller_process_active gauge
+srt_caller_process_active {payload["ffmpeg_running"]}
+"""
 
-@app.post("/ffmpeg/stop")
-def ffmpeg_stop():
-    result = run_script(STOP_SCRIPT, timeout_seconds=20)
-
-    return {
-        "action": "stop",
-        **result,
-        "status": get_source_status(),
-    }
-
-
-@app.get("/ffmpeg/status")
-def ffmpeg_status():
-    result = run_script(STATUS_SCRIPT, timeout_seconds=20)
-
-    return {
-        "action": "status",
-        **result,
-        "status": get_source_status(),
-    }
+    return metrics_text

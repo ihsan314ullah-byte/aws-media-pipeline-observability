@@ -305,3 +305,104 @@ This project was built as a **hands-on streaming + observability system** combin
 ```
 
 ---
+
+---
+
+## JWT Admin/Viewer Token Generation
+
+The dashboard uses JWT-based role access control.
+
+Protected admin operations require a valid JWT token with:
+
+```json
+{
+  "role": "admin"
+}
+Viewer tokens are intentionally blocked from administrative operations such as starting or stopping FFmpeg.
+# Generate Admin Token
+Run this from the source-ec2 directory on the EC2 instance:
+```bash
+cd ~/aws-media-pipeline-observability/source-ec2
+
+python3 - <<'PY'
+import jwt
+import datetime
+from pathlib import Path
+
+secret = ""
+
+for line in Path(".env").read_text().splitlines():
+    if line.startswith("JWT_SECRET="):
+        secret = line.split("=", 1)[1].strip()
+        break
+
+payload = {
+    "sub": "ihsan",
+    "role": "admin",
+    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+}
+
+print(jwt.encode(payload, secret, algorithm="HS256"))
+PY
+```
+Paste the generated token into the dashboard JWT field.
+
+Admin permissions:
+
+Start FFmpeg
+Stop FFmpeg
+Read protected runtime config
+Open HLS/DASH playback links from runtime config
+# Generate Viewer Token
+Run this from the source-ec2 directory on the EC2 instance:
+```
+cd ~/aws-media-pipeline-observability/source-ec2
+
+python3 - <<'PY'
+import jwt
+import datetime
+from pathlib import Path
+
+secret = ""
+
+for line in Path(".env").read_text().splitlines():
+    if line.startswith("JWT_SECRET="):
+        secret = line.split("=", 1)[1].strip()
+        break
+
+payload = {
+    "sub": "viewer",
+    "role": "viewer",
+    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+}
+
+print(jwt.encode(payload, secret, algorithm="HS256"))
+PY
+```
+Expected viewer behavior:
+
+Start FFmpeg: blocked with 403 Forbidden
+Stop FFmpeg: blocked with 403 Forbidden
+Protected runtime config: blocked with 403 Forbidden
+# Expected RBAC Behavior
+Token Type	Expected Result
+No token	401 Unauthorized
+Invalid token	401 Unauthorized
+Expired token	401 Token expired
+Viewer token	403 Administrator privileges required
+Admin token	Allowed for protected operations
+# Protected Endpoints
+```
+POST /ffmpeg/start
+POST /ffmpeg/stop
+GET /runtime-config
+```
+# Public Endpoints
+```
+GET /
+GET /dashboard
+GET /health
+GET /status
+GET /ffmpeg/status
+GET /metrics
+```

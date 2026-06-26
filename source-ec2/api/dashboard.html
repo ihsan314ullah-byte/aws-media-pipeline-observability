@@ -1,173 +1,273 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>AWS Media Pipeline Source Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fa;
-            margin: 0;
-            padding: 30px;
-            color: #222;
-        }
-        .container {
-            max-width: 900px;
-            margin: auto;
-        }
-        .header {
-            background: #1f2937;
-            color: white;
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-        }
-        .header p {
-            margin-top: 8px;
-            color: #d1d5db;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 18px;
-        }
-        .card {
-            background: white;
-            padding: 22px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .label {
-            color: #6b7280;
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
-        .value {
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .running {
-            color: #15803d;
-        }
-        .stopped {
-            color: #b91c1c;
-        }
-        .links {
-            margin-top: 24px;
-            background: white;
-            padding: 22px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-        .links a {
-            display: inline-block;
-            margin: 8px 12px 8px 0;
-            padding: 10px 14px;
-            background: #2563eb;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-        }
-        .footer {
-            margin-top: 20px;
-            font-size: 13px;
-            color: #6b7280;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>AWS Media Pipeline Observability</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 28px;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 30px 18px;
+      margin-bottom: 24px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #1e3a8a, #0f172a);
+      border: 1px solid #334155;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px 0;
+      color: #f8fafc;
+      font-size: 34px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: #bfdbfe;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #f8fafc;
+    }
+
+    .section-title {
+      margin-top: 14px;
+      color: #93c5fd;
+      font-weight: bold;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    td {
+      padding: 10px 6px;
+      border-bottom: 1px solid #1f2937;
+    }
+
+    td:first-child {
+      color: #94a3b8;
+    }
+
+    td:last-child {
+      text-align: right;
+      font-weight: bold;
+    }
+
+    .status-running { color: #22c55e; }
+    .status-stopped { color: #ef4444; }
+
+    button, a.button {
+      display: inline-block;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 6px 6px 6px 0;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    button:hover, a.button:hover {
+      background: #1d4ed8;
+    }
+
+    .danger { background: #dc2626; }
+    .danger:hover { background: #b91c1c; }
+
+    .output {
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 13px;
+      max-height: 260px;
+      overflow: auto;
+    }
+
+    .small {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>AWS Media Pipeline Source Dashboard</h1>
-            <p>EC2 FFmpeg SRT Caller → MediaConnect → MediaLive → MediaPackage</p>
-        </div>
+  <div class="hero">
+  	<h1>AWS Media Pipeline</h1>
 
-        <div class="grid">
-            <div class="card">
-                <div class="label">FFmpeg Status</div>
-                <div id="ffmpeg_status" class="value">Loading...</div>
-            </div>
+	<p/class="tagline">
+    		End-to-end Live Streaming Pipeline
+	</p>
 
-            <div class="card">
-                <div class="label">Bitrate</div>
-                <div id="bitrate" class="value">Loading...</div>
-            </div>
+	<p class="architecture">
+    	Architecture:
+    	FFmpeg (SRT-Caller) → MediaConnect (SRT-Listener) → MediaLive → MediaPackage → HLS/DASH (ABR)
+	</p>
+  </div>
 
-            <div class="card">
-                <div class="label">Speed</div>
-                <div id="speed" class="value">Loading...</div>
-            </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Host Source EC2 Metrics</h2>
 
-            <div class="card">
-                <div class="label">CPU Usage</div>
-                <div id="cpu" class="value">Loading...</div>
-            </div>
+      <div class="section-title">EC2 Metrics</div>
+      <table>
+        <tr><td>CPU Usage</td><td id="cpu">Loading...</td></tr>
+        <tr><td>Memory Usage</td><td id="memory">Loading...</td></tr>
+      </table>
 
-            <div class="card">
-                <div class="label">Memory Usage</div>
-                <div id="memory" class="value">Loading...</div>
-            </div>
-        </div>
-
-        <div class="links">
-            <h2>Quick Links</h2>
-            <a href="/status" target="_blank">Status API</a>
-            <a href="/metrics" target="_blank">Metrics API</a>
-            <a href="#" id="grafana_link" target="_blank">Grafana</a>
-            <a href="#" id="prometheus_link" target="_blank">Prometheus</a>
-        </div>
-
-        <div class="footer">
-            Auto-refreshes every 5 seconds. Start/stop control remains on EC2 shell scripts for safety.
-        </div>
+      <div class="section-title">FFmpeg / SRT Metrics</div>
+      <table>
+        <tr><td>FFmpeg Status</td><td id="ffmpegStatus">Loading...</td></tr>
+        <tr><td>SRT Caller Active</td><td id="srtCallerActive">Loading...</td></tr>
+        <tr><td>Bitrate</td><td id="bitrate">Loading...</td></tr>
+        <tr><td>Speed</td><td id="speed">Loading...</td></tr>
+      </table>
     </div>
 
-    <script>
-        function setLinks() {
-            const host = window.location.hostname;
-            document.getElementById("grafana_link").href = "http://" + host + ":3000";
-            document.getElementById("prometheus_link").href = "http://" + host + ":9090";
+    <div class="card">
+      <h2>FFmpeg / SRT Control</h2>
+      <button onclick="startFfmpeg()">Start FFmpeg</button>
+      <button class="danger" onclick="stopFfmpeg()">Stop FFmpeg</button>
+      <div id="controlOutput" class="output">Start/stop output will appear here.</div>
+    </div>
+
+    <div class="card">
+      <h2>Monitoring Links</h2>
+      <a class="button" href="/status" target="_blank">Status API</a>
+      <a class="button" href="/metrics" target="_blank">Metrics API</a>
+      <a id="prometheusLink" class="button" href="#" target="_blank">Prometheus</a>
+      <a id="grafanaLink" class="button" href="#" target="_blank">Grafana</a>
+      <p class="small">
+        Future phase: add CloudWatch metrics for MediaConnect, MediaLive, and MediaPackage into Grafana.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>ABR Playback Endpoints</h2>
+      <a id="hlsPlayerLink" class="button" href="#" target="_blank">Open HLS in hls.js Player</a>
+      <a id="dashPlayerLink" class="button" href="#" target="_blank">Open DASH in DASH-IF Player</a>
+      <br />
+      <p class="small">
+        Future phase: embed an HLS/DASH player directly on this dashboard and show a “Media Pipeline Offline” slate when the stream is stopped.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    async function getJson(url, options = {}) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return await response.json();
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function setStatus(isRunning) {
+      const ffmpeg = document.getElementById("ffmpegStatus");
+      ffmpeg.textContent = isRunning ? "RUNNING" : "STOPPED";
+      ffmpeg.className = isRunning ? "status-running" : "status-stopped";
+
+      const srt = document.getElementById("srtCallerActive");
+      srt.textContent = isRunning ? "ON" : "OFF";
+      srt.className = isRunning ? "status-running" : "status-stopped";
+    }
+
+    async function refreshStatus() {
+      try {
+        const data = await getJson("/status");
+        setStatus(data.ffmpeg_running);
+        setText("bitrate", `${Number(data.ffmpeg_bitrate_kbps).toFixed(1)} kbps`);
+        setText("speed", `${Number(data.ffmpeg_speed).toFixed(2)}x`);
+        setText("cpu", `${data.cpu_usage_percent}%`);
+        setText("memory", `${data.memory_usage_percent}%`);
+      } catch (err) {
+        document.getElementById("controlOutput").textContent = `Status refresh failed: ${err}`;
+      }
+    }
+
+    async function loadRuntimeConfig() {
+      try {
+        const host = window.location.hostname;
+        document.getElementById("prometheusLink").href = `http://${host}:9090`;
+        document.getElementById("grafanaLink").href = `http://${host}:3000`;
+
+        const config = await getJson("/runtime-config");
+
+        if (config.hls_url) {
+          document.getElementById("hlsPlayerLink").href =
+            `https://hlsjs.video-dev.org/demo/?src=${encodeURIComponent(config.hls_url)}`;
         }
 
-        async function loadStatus() {
-            try {
-                const res = await fetch("/status");
-                const data = await res.json();
-
-                const statusEl = document.getElementById("ffmpeg_status");
-
-                if (data.ffmpeg_running) {
-                    statusEl.textContent = "RUNNING";
-                    statusEl.className = "value running";
-                } else {
-                    statusEl.textContent = "STOPPED";
-                    statusEl.className = "value stopped";
-                }
-
-                document.getElementById("bitrate").textContent =
-                    (data.ffmpeg_bitrate_kbps / 1000).toFixed(2) + " Mbps";
-
-                document.getElementById("speed").textContent =
-                    Number(data.ffmpeg_speed).toFixed(2) + "x";
-
-                document.getElementById("cpu").textContent =
-                    data.cpu_usage_percent + "%";
-
-                document.getElementById("memory").textContent =
-                    data.memory_usage_percent + "%";
-
-            } catch (err) {
-                document.getElementById("ffmpeg_status").textContent = "API ERROR";
-                document.getElementById("ffmpeg_status").className = "value stopped";
-            }
+        if (config.dash_url) {
+          document.getElementById("dashPlayerLink").href =
+            `https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=${config.dash_url}`;
         }
+      } catch (err) {
+        document.getElementById("controlOutput").textContent = `Runtime config load failed: ${err}`;
+      }
+    }
 
-        setLinks();
-        loadStatus();
-        setInterval(loadStatus, 5000);
-    </script>
+    async function startFfmpeg() {
+      const output = document.getElementById("controlOutput");
+      output.textContent = "Starting FFmpeg...";
+      try {
+        const data = await getJson("/ffmpeg/start", { method: "POST" });
+        output.textContent = JSON.stringify(data, null, 2);
+        await refreshStatus();
+      } catch (err) {
+        output.textContent = `Start failed: ${err}`;
+      }
+    }
+
+    async function stopFfmpeg() {
+      const output = document.getElementById("controlOutput");
+      output.textContent = "Stopping FFmpeg...";
+      try {
+        const data = await getJson("/ffmpeg/stop", { method: "POST" });
+        output.textContent = JSON.stringify(data, null, 2);
+        await refreshStatus();
+      } catch (err) {
+        output.textContent = `Stop failed: ${err}`;
+      }
+    }
+
+    loadRuntimeConfig();
+    refreshStatus();
+    setInterval(refreshStatus, 5000);
+  </script>
 </body>
 </html>

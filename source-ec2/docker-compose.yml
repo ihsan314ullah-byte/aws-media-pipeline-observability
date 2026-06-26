@@ -6,9 +6,15 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    pid: "host"
+    privileged: true
+    environment:
+      HOST_PROJECT_DIR: /home/ubuntu/aws-media-pipeline-observability/source-ec2
     volumes:
       - ./logs:/app/logs
-      - /proc:/host/proc:ro
+      - ./scripts:/app/scripts
+      - ./input:/app/input:ro
+      - ./.env:/app/.env:ro
 
   prometheus:
     image: prom/prometheus:latest

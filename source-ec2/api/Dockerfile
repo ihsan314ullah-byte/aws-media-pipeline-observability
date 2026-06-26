@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     iproute2 \
     iputils-ping \
     curl \
+    util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

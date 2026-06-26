@@ -12,6 +12,28 @@ LOG_FILE = "/app/logs/ffmpeg.log"
 PID_FILE = "/app/logs/ffmpeg.pid"
 DASHBOARD_FILE = Path("/app/dashboard.html")
 
+START_SCRIPT = "/app/scripts/start_ffmpeg.sh"
+STOP_SCRIPT = "/app/scripts/stop_ffmpeg.sh"
+STATUS_SCRIPT = "/app/scripts/status.sh"
+
+
+def load_env_file(path="/app/.env"):
+    if not os.path.exists(path):
+        return
+
+    with open(path, "r", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+load_env_file()
+
 
 def run(cmd):
     try:
@@ -38,6 +60,7 @@ def extract_ffmpeg_metrics():
         speed_matches = re.findall(r"speed=\s*([\d\.]+)x", log)
         if speed_matches:
             speed = float(speed_matches[-1])
+
     except Exception:
         pass
 
@@ -55,7 +78,30 @@ def is_ffmpeg_running():
         if not pid.isdigit():
             return 0
 
-        return 1 if os.path.exists(f"/host/proc/{pid}") else 0
+        stat_file = f"/proc/{pid}/stat"
+
+        if not os.path.exists(stat_file):
+            return 0
+
+        with open(stat_file, "r", errors="ignore") as f:
+            stat = f.read()
+
+        parts = stat.split()
+
+        if len(parts) > 2 and parts[2] == "Z":
+            return 0
+
+        cmdline_file = f"/proc/{pid}/cmdline"
+
+        if os.path.exists(cmdline_file):
+            with open(cmdline_file, "r", errors="ignore") as f:
+                cmdline = f.read().replace("\x00", " ")
+
+            if "ffmpeg" in cmdline:
+                return 1
+
+        return 0
+
     except Exception:
         return 0
 
@@ -80,6 +126,60 @@ def get_source_status():
     }
 
 
+def run_script(script_path, timeout_seconds=20):
+    try:
+        host_project_dir = os.getenv(
+            "HOST_PROJECT_DIR",
+            "/home/ubuntu/aws-media-pipeline-observability/source-ec2",
+        )
+
+        script_name = os.path.basename(script_path)
+        host_script = f"{host_project_dir}/scripts/{script_name}"
+
+        result = subprocess.run(
+            [
+                "nsenter",
+                "--target",
+                "1",
+                "--mount",
+                "--uts",
+                "--ipc",
+                "--net",
+                "--pid",
+                "--",
+                "bash",
+                "-lc",
+                f"cd {host_project_dir} && {host_script}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+
+        return {
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "timed_out": False,
+        }
+
+    except subprocess.TimeoutExpired as e:
+        return {
+            "returncode": 124,
+            "stdout": e.stdout or "",
+            "stderr": e.stderr or "Command timed out",
+            "timed_out": True,
+        }
+
+    except Exception as e:
+        return {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": str(e),
+            "timed_out": False,
+        }
+
+
 @app.get("/", response_class=HTMLResponse)
 def root():
     if DASHBOARD_FILE.exists():
@@ -97,6 +197,14 @@ def status():
     return get_source_status()
 
 
+@app.get("/runtime-config")
+def runtime_config():
+    return {
+        "hls_url": os.getenv("HLS_URL", ""),
+        "dash_url": os.getenv("DASH_URL", ""),
+    }
+
+
 @app.get("/metrics", response_class=PlainTextResponse)
 def metrics():
     data = get_source_status()
@@ -112,3 +220,36 @@ def metrics():
         f"ffmpeg_speed {data['ffmpeg_speed']}\n"
         f"srt_caller_process_active {srt_caller_process_active}\n"
     )
+
+
+@app.post("/ffmpeg/start")
+def ffmpeg_start():
+    result = run_script(START_SCRIPT, timeout_seconds=20)
+
+    return {
+        "action": "start",
+        **result,
+        "status": get_source_status(),
+    }
+
+
+@app.post("/ffmpeg/stop")
+def ffmpeg_stop():
+    result = run_script(STOP_SCRIPT, timeout_seconds=20)
+
+    return {
+        "action": "stop",
+        **result,
+        "status": get_source_status(),
+    }
+
+
+@app.get("/ffmpeg/status")
+def ffmpeg_status():
+    result = run_script(STATUS_SCRIPT, timeout_seconds=20)
+
+    return {
+        "action": "status",
+        **result,
+        "status": get_source_status(),
+    }

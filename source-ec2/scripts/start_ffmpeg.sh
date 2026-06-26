@@ -9,7 +9,25 @@ LOG_FILE="$LOG_DIR/ffmpeg.log"
 PID_FILE="$LOG_DIR/ffmpeg.pid"
 LOCK_FILE="$LOG_DIR/ffmpeg.lock"
 
-SRT_TARGET="srt://98.88.202.73:5000?mode=caller&latency=2000"
+ENV_FILE="$BASE_DIR/.env"
+
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
+SRT_TARGET_IP="${SRT_TARGET_IP:-}"
+SRT_TARGET_PORT="${SRT_TARGET_PORT:-5000}"
+SRT_LATENCY_MS="${SRT_LATENCY_MS:-2000}"
+
+if [ -z "$SRT_TARGET_IP" ]; then
+    echo "ERROR: SRT_TARGET_IP is not set."
+    echo "Create source-ec2/.env from source-ec2/.env.example and set Terraform output source_ingest_ip."
+    exit 1
+fi
+
+SRT_TARGET="srt://${SRT_TARGET_IP}:${SRT_TARGET_PORT}?mode=caller&latency=${SRT_LATENCY_MS}"
 
 mkdir -p "$LOG_DIR"
 

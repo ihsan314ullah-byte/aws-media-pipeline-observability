@@ -15,13 +15,24 @@ End-to-end AWS live streaming lab using:
 ## Project Structure
 
 ```text
-infra/        Terraform AWS Media Services IaC
 source-ec2/   FFmpeg source, FastAPI, Prometheus, Grafana, Docker
 scripts/      Helper scripts
 dashboards/   Grafana dashboard exports
-docs/         Architecture, troubleshooting, cost control
+docs/         Architecture
+```
+
+# Infrastructure provisioning
+
+``` maintained in the companion repository:https://github.com/ihsan314ullah-byte/terraform-aws-mediaservices
+
+After provisioning the AWS Media services, generate the runtime configuration and copy the generated .env into:
+
+source-ec2/.env
+```
 
 # Architecture
+
+```
 EC2 FFmpeg SRT Caller
         |
         v
@@ -35,6 +46,8 @@ AWS MediaPackage
         |
         v
 HLS / DASH ABR Playback
+```
+
 # Observability
 EC2 Source Metrics -> FastAPI /metrics -> Prometheus -> Grafana
 AWS Media Metrics -> CloudWatch -> Grafana

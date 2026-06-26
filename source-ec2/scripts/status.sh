@@ -17,9 +17,22 @@ if [ -f "$PID_FILE" ]; then
     PID="$(cat "$PID_FILE" || true)"
 
     if [ -n "$PID" ] && ps -p "$PID" > /dev/null; then
-        echo "Status: RUNNING"
-        echo "PID: $PID"
-        ps -p "$PID" -o pid,ppid,etime,%cpu,%mem,cmd
+        PROCESS_STATE="$(ps -p "$PID" -o stat= | awk '{print $1}')"
+        PROCESS_CMD="$(ps -p "$PID" -o cmd= || true)"
+
+        if echo "$PROCESS_STATE" | grep -q "Z"; then
+            echo "Status: STALE PID FILE"
+            echo "PID in file: $PID"
+            echo "Reason: FFmpeg process is defunct/zombie"
+        elif echo "$PROCESS_CMD" | grep -q "ffmpeg"; then
+            echo "Status: RUNNING"
+            echo "PID: $PID"
+            ps -p "$PID" -o pid,ppid,etime,%cpu,%mem,stat,cmd
+        else
+            echo "Status: STALE PID FILE"
+            echo "PID in file: $PID"
+            echo "Reason: PID exists but is not FFmpeg"
+        fi
     else
         echo "Status: STALE PID FILE"
         echo "PID in file: $PID"
@@ -27,6 +40,7 @@ if [ -f "$PID_FILE" ]; then
 else
     echo "Status: NOT RUNNING"
 fi
+
 
 echo ""
 echo "[CPU]"

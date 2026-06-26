@@ -23,7 +23,8 @@ docs/         Architecture
 
 # Infrastructure provisioning
 
-``` maintained in the companion repository:https://github.com/ihsan314ullah-byte/terraform-aws-mediaservices
+``` 
+maintained in the companion repository:https://github.com/ihsan314ullah-byte/terraform-aws-mediaservices
 
 After provisioning the AWS Media services, generate the runtime configuration and copy the generated .env into:
 

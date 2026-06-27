@@ -1,6 +1,6 @@
-# AWS Media Pipeline Observability Lab
+# AWS Media Pipeline Observability
 
-End-to-end live streaming and observability lab using AWS Media Services, FFmpeg, FastAPI, Prometheus, Grafana, CloudWatch, JWT authentication, and role-based access control.
+End-to-end live streaming and observability using AWS Media Services, FFmpeg, FastAPI, Prometheus, Grafana, CloudWatch, JWT authentication, and role-based access control.
 
 This repository contains the **runtime and observability layer** of the project. AWS infrastructure is provisioned separately in the companion Terraform repository:
 

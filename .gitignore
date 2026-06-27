@@ -1,39 +1,17 @@
-# ----------------------------
 # Python
-# ----------------------------
 __pycache__/
 *.pyc
-venv/
-.venv/
 
-# Environment files
-.env
+# Runtime logs
+source-ec2/logs/*
+!source-ec2/logs/.gitkeep
+
+# Runtime data
+source-ec2/data/*
+!source-ec2/data/.gitkeep
+
+# Environment
 source-ec2/.env
 
-# ----------------------------
-# Logs & Runtime
-# ----------------------------
-*.log
-logs/
-source-ec2/logs/
-*.pid
-tmp/
-generated/
-
-# ----------------------------
-# Docker
-# ----------------------------
-.docker/
-
-# ----------------------------
-# IDE / OS
-# ----------------------------
-.vscode/
-.idea/
+# macOS
 .DS_Store
-Thumbs.db
-
-# ----------------------------
-# Project-specific cache
-# ----------------------------
-source-ec2/api/__pycache__/

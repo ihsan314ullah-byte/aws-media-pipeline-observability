@@ -2,9 +2,11 @@
 
 ## Overview
 
-This document captures common issues encountered while developing and operating the AWS Media Pipeline Observability project, along with their resolutions.
+This document captures common issues encountered while developing and
+operating the AWS Media Pipeline Observability project, along with their
+resolutions.
 
----
+------------------------------------------------------------------------
 
 # Git & Repository Issues
 
@@ -12,7 +14,7 @@ This document captures common issues encountered while developing and operating 
 
 ### Symptoms
 
-```text
+``` text
 fatal: not a git repository (or any of the parent directories): .git
 ```
 
@@ -22,321 +24,255 @@ Git commands were executed outside the repository root.
 
 ### Resolution
 
-Navigate to the repository first:
-
-```bash
+``` bash
 cd ~/aws-media-pipeline-observability
 git status
 ```
 
----
+------------------------------------------------------------------------
 
-## Problem: Obsolete or duplicate documentation
+## Problem: Push rejected (non-fast-forward)
 
 ### Symptoms
 
-* Multiple README files
-* Conflicting setup instructions
-* Outdated Grafana documentation
+``` text
+failed to push some refs
+```
+
+### Cause
+
+The remote repository contains commits not present locally.
 
 ### Resolution
 
-Maintain:
+``` bash
+git pull --rebase origin main
+git push origin main
+```
 
-* One authoritative `README.md`
-* Detailed documentation under `docs/`
+------------------------------------------------------------------------
 
-Remove obsolete documentation after its content has been merged.
+## Problem: Obsolete or duplicate documentation
 
----
+### Resolution
+
+-   Keep one authoritative `README.md`.
+-   Store detailed documentation under `docs/`.
+-   Remove obsolete documentation after content has been merged.
+
+------------------------------------------------------------------------
 
 # Docker
 
 ## Problem: Docker permission denied
 
-### Symptoms
-
-```text
-permission denied while trying to connect to the Docker daemon
-```
-
 ### Resolution
 
-Add the user to the Docker group:
-
-```bash
+``` bash
 sudo usermod -aG docker ubuntu
 ```
 
-Log out and log back in.
+Log out and back in.
 
----
+## Problem: Containers fail to start
+
+### Check
+
+``` bash
+docker compose ps
+docker compose logs
+```
+
+Verify:
+
+-   Docker daemon is running.
+-   Required ports are available.
+-   `.env` exists.
+-   Images were built successfully.
 
 ## Problem: Grafana dashboards disappear
-
-### Cause
-
-Grafana storage is not persistent.
 
 ### Resolution
 
 Ensure Docker Compose uses a persistent volume:
 
-```yaml
+``` yaml
 volumes:
   - grafana-data:/var/lib/grafana
 ```
 
 Avoid:
 
-```bash
+``` bash
 docker compose down -v
 ```
 
-unless you intentionally want to remove persistent volumes.
+unless intentionally removing persistent data.
 
----
+------------------------------------------------------------------------
 
 # AWS CLI & IAM
 
 ## Problem: `aws: command not found`
 
-### Resolution
+Install AWS CLI v2 and verify:
 
-Install AWS CLI v2 using the official installer.
-
-Verify:
-
-```bash
+``` bash
 aws --version
 ```
 
----
-
 ## Problem: Unable to locate credentials
 
-### Symptoms
+Attach an EC2 IAM role with:
 
-```text
-Unable to locate credentials
-```
-
-### Cause
-
-The EC2 instance has no IAM role attached.
-
-### Resolution
-
-Attach an IAM role with:
-
-* CloudWatchReadOnlyAccess
+-   CloudWatchReadOnlyAccess
 
 Verify:
 
-```bash
+``` bash
 aws sts get-caller-identity
 ```
 
----
+------------------------------------------------------------------------
 
 # CloudWatch
 
 ## Problem: Grafana CloudWatch datasource fails
 
-### Possible causes
-
-* Incorrect AWS region
-* Missing IAM permissions
-* CloudWatch datasource not provisioned
-
-### Resolution
-
 Verify:
 
-* IAM role attached
-* `cloudwatch.yml`
-* CloudWatch datasource status in Grafana
-* Region matches deployed AWS resources
+-   IAM role attached
+-   Correct AWS Region
+-   CloudWatch datasource configured
+-   Region matches deployed infrastructure
 
----
+------------------------------------------------------------------------
 
 # FFmpeg
 
 ## Problem: FFmpeg does not start
 
-### Check
+Check:
 
-```bash
+``` bash
 ./scripts/status.sh
-```
-
-Inspect:
-
-```bash
 tail -f logs/ffmpeg.log
 ```
 
 Verify:
 
-* `.env`
-* Input video
-* SRT destination
-* Target IP and port
-
----
+-   `.env`
+-   Input video
+-   Target IP and port
+-   SRT destination
 
 ## Problem: FFmpeg appears stopped but stale metrics remain
 
-### Cause
+Reset runtime metrics when FFmpeg stops.
 
-Old metric values persisted after FFmpeg exited.
-
-### Resolution
-
-Reset runtime metrics when FFmpeg stops so the dashboard reflects the current state.
-
----
+------------------------------------------------------------------------
 
 # AWS Media Services
 
 ## Problem: MediaLive Active Alerts remain high
 
-### Possible causes
-
-* FFmpeg not running
-* SRT stream not reaching MediaConnect
-* Incorrect target IP or port
-
-### Resolution
-
 Verify:
 
-* FFmpeg process
-* MediaConnect flow
-* MediaLive input
-* Grafana MediaConnect bitrate panel
-
----
+-   FFmpeg process
+-   MediaConnect flow
+-   MediaLive input
+-   MediaConnect bitrate
 
 ## Problem: No MediaPackage activity
 
-### Cause
-
-No client is requesting playback.
-
-### Resolution
-
 Open the HLS or DASH endpoint in a compatible player.
 
-Verify request metrics in Grafana.
-
----
+------------------------------------------------------------------------
 
 # JWT & RBAC
 
 ## Problem: HTTP 401 Unauthorized
 
-### Causes
-
-* Missing token
-* Invalid token
-* Expired token
-
-### Resolution
-
 Generate a new JWT and ensure the correct secret is used.
-
----
 
 ## Problem: HTTP 403 Forbidden
 
-### Cause
+Viewer role attempted an administrative operation.
 
-Viewer role attempting an administrative operation.
-
-### Expected behavior
-
-Viewer accounts may monitor the system but cannot:
-
-* Start FFmpeg
-* Stop FFmpeg
-* Read protected runtime configuration
-
----
+------------------------------------------------------------------------
 
 # Grafana
 
 ## Problem: Dashboard not imported automatically
 
-### Cause
+Verify:
 
-Missing dashboard provisioning configuration.
-
-### Resolution
-
-Ensure:
-
-```text
+``` text
 grafana/provisioning/dashboards/dashboard.yml
-```
-
-exists and dashboard JSON files are located under:
-
-```text
 source-ec2/grafana/dashboards/
 ```
 
-Restart Grafana:
+Restart:
 
-```bash
+``` bash
 docker compose restart grafana
 ```
 
----
+------------------------------------------------------------------------
 
 # Runtime Configuration
 
 ## Problem: Incorrect runtime values
 
-### Cause
+### Symptoms
 
-`.env` does not match the deployed infrastructure.
+-   FFmpeg cannot connect
+-   MediaConnect receives no traffic
+-   Playback fails
 
 ### Resolution
 
-Regenerate the runtime configuration from the Terraform repository and replace:
+1.  Regenerate the runtime `.env` from the Terraform repository.
+2.  Copy it to:
 
-```text
+``` text
 source-ec2/.env
 ```
 
----
+3.  Restart:
+
+``` bash
+docker compose restart
+```
+
+4.  Start FFmpeg again.
+
+------------------------------------------------------------------------
 
 # Repository Maintenance
 
 ## Recommended Practices
 
-* Keep one authoritative `README.md`.
-* Store detailed documentation under `docs/`.
-* Keep runtime-generated files out of Git.
-* Preserve empty runtime directories using `.gitkeep`.
-* Commit meaningful milestones rather than many tiny commits.
-* Use an IAM instance profile instead of long-lived AWS access keys.
+-   Keep one authoritative `README.md`.
+-   Store detailed documentation under `docs/`.
+-   Never commit production `.env` files.
+-   Use IAM roles instead of long-lived access keys.
+-   Keep Terraform infrastructure and runtime operations in separate
+    repositories.
+-   Remove obsolete notes before publishing.
 
----
+------------------------------------------------------------------------
 
-# Operational Checklist
+# Final Validation Checklist
 
-Before demonstrating the project, verify:
+Before demonstrating:
 
-* Docker containers are running.
-* FFmpeg is operational.
-* MediaLive channel is running.
-* Grafana dashboards load correctly.
-* CloudWatch datasource is healthy.
-* Prometheus is scraping metrics.
-* JWT authentication works.
-* Viewer RBAC restrictions are enforced.
-* HLS/DASH playback is functional.
-
-This checklist provides a quick health assessment before a demo or operational handover.
+-   Docker containers healthy
+-   FFmpeg starts successfully
+-   FastAPI dashboard loads
+-   Prometheus scraping metrics
+-   Grafana dashboards load
+-   CloudWatch datasource works
+-   MediaConnect receives traffic
+-   MediaLive processes stream
+-   HLS/DASH playback succeeds

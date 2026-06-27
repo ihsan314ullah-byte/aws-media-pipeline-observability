@@ -67,6 +67,18 @@ This project is split into two repositories.
 
 ```text
 terraform-aws-mediaservices
+        │
+        ▼
+Provision AWS Media Infrastructure
+        │
+        ▼
+Generate runtime .env
+        │
+        ▼
+aws-media-pipeline-observability
+        │
+        ▼
+Deploy runtime services
 ```
 
 Responsible for:
@@ -132,6 +144,7 @@ This design allows:
 * Clear log collection
 * Easier troubleshooting
 * Dashboard-based start/stop control
+* Avoids container lifecycle affecting the streaming process
 
 ## FastAPI Role
 
@@ -237,7 +250,6 @@ Public endpoints remain accessible without a token:
 ```text
 GET /
 GET /dashboard
-GET /health
 GET /status
 GET /ffmpeg/status
 GET /metrics
@@ -258,11 +270,35 @@ When FFmpeg is started:
 
 ```text
 FFmpeg running = 1
-FFmpeg bitrate rises
-MediaConnect source bitrate rises
-MediaLive input frame rate appears
-MediaLive active alerts drop
-HLS/DASH playback works
+MediaConnect source bitrate increases
+MediaLive active alerts clear
+MediaLive input frame rate becomes available
+HLS/DASH playback resumes
+Grafana dashboards update with runtime and AWS metrics
 ```
 
-This gives a clear end-to-end operational demonstration from source ingest to AWS processing to playback and monitoring.
+## Design Principles
+
+This project intentionally separates infrastructure provisioning from runtime operations.
+
+**Infrastructure repository**
+
+Responsible for:
+
+* AWS Media Services
+* IAM
+* Terraform
+* Runtime configuration generation
+
+**Runtime repository**
+
+Responsible for:
+
+* FFmpeg orchestration
+* Runtime APIs
+* Authentication
+* Observability
+* Monitoring
+* Dashboard operations
+
+This separation makes the solution easier to deploy, maintain, troubleshoot, and extend while keeping infrastructure and application concerns independent.

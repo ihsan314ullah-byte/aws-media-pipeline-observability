@@ -1,48 +1,25 @@
 # AWS Media Pipeline Observability Lab
 
-End-to-end live streaming and observability lab using AWS Media Services, FFmpeg, FastAPI, Prometheus, Grafana, CloudWatch, JWT authentication, and RBAC.
+End-to-end live streaming and observability lab using AWS Media Services, FFmpeg, FastAPI, Prometheus, Grafana, CloudWatch, JWT authentication, and role-based access control.
 
-## What This Project Demonstrates
-
-This project shows how to operate and monitor a live media pipeline using both custom runtime metrics and AWS service metrics.
-
-The pipeline includes:
-
-* EC2-hosted FFmpeg source
-* SRT caller ingest
-* AWS MediaConnect SRT listener
-* AWS MediaLive processing
-* AWS MediaPackage HLS/DASH delivery
-* FastAPI operations dashboard
-* Prometheus runtime metrics
-* Grafana dashboards
-* CloudWatch metrics for AWS Media Services
-* JWT authentication
-* Role-Based Access Control
-
-## Companion Infrastructure Repository
-
-AWS infrastructure is maintained in the companion Terraform repository:
+This repository contains the **runtime and observability layer** of the project. AWS infrastructure is provisioned separately in the companion Terraform repository:
 
 ```text
 https://github.com/ihsan314ullah-byte/terraform-aws-mediaservices
 ```
 
-That repository is responsible for:
+## Project Overview
 
-* MediaConnect
-* MediaLive
-* MediaPackage
-* HLS endpoint
-* DASH endpoint
-* IAM resources
-* Terraform outputs
-* Runtime `.env` generation
+This project demonstrates how to run, control, and monitor a live media pipeline using a combination of host-level runtime metrics and AWS Media Services metrics.
+
+The system sends a local MP4 video file through FFmpeg as an SRT caller into AWS MediaConnect. AWS MediaLive processes the input and sends the output to AWS MediaPackage for HLS/DASH playback.
+
+Prometheus collects runtime metrics from the FastAPI application, while Grafana visualizes both Prometheus metrics and AWS CloudWatch metrics.
 
 ## Architecture
 
 ```text
-OBS / Video File
+MP4 Video File
         |
         v
 FFmpeg on EC2
@@ -60,14 +37,16 @@ AWS MediaLive
 AWS MediaPackage
         |
         v
-HLS / DASH ABR Playback
+HLS / DASH Playback
 ```
 
 ## Observability Flow
 
 ```text
-Host Runtime Metrics
-FFmpeg + EC2 + FastAPI
+FFmpeg + EC2 Runtime Metrics
+        |
+        v
+FastAPI /metrics endpoint
         |
         v
 Prometheus
@@ -77,8 +56,7 @@ Grafana
 ```
 
 ```text
-AWS Media Service Metrics
-MediaConnect + MediaLive + MediaPackage
+AWS Media Services Metrics
         |
         v
 CloudWatch
@@ -87,14 +65,56 @@ CloudWatch
 Grafana
 ```
 
-## Project Structure
+## Companion Terraform Repository
+
+The companion repository provisions the AWS infrastructure and generates the runtime `.env` file used by this repository.
+
+That repository is responsible for:
+
+* AWS MediaConnect
+* AWS MediaLive
+* AWS MediaPackage
+* IAM resources
+* HLS endpoint
+* DASH endpoint
+* Terraform outputs
+* Runtime `.env` generation
+
+This repository is responsible for:
+
+* Host-managed FFmpeg
+* FastAPI operations API
+* HTML operations dashboard
+* Prometheus runtime metrics
+* Grafana visualization
+* CloudWatch datasource integration
+* JWT authentication
+* Admin/viewer RBAC
+* Runtime documentation
+
+## Features
+
+* Host-managed FFmpeg SRT caller workflow
+* FastAPI dashboard for runtime visibility
+* FFmpeg start/stop/status operations
+* Prometheus-compatible `/metrics` endpoint
+* Grafana dashboard support
+* CloudWatch datasource support
+* JWT-based authentication
+* Admin and viewer RBAC roles
+* Docker Compose runtime stack
+* Persistent Grafana/Prometheus data volumes
+* Documentation for deployment, architecture, and troubleshooting
+
+## Repository Structure
 
 ```text
 aws-media-pipeline-observability/
 ├── README.md
-├── dashboards/
 ├── docs/
-├── scripts/
+│   ├── architecture.md
+│   ├── deployment.md
+│   └── troubleshooting.md
 └── source-ec2/
     ├── api/
     │   ├── api.py
@@ -118,14 +138,35 @@ aws-media-pipeline-observability/
 
 ## Runtime Components
 
-| Component      | Purpose                                            |
-| -------------- | -------------------------------------------------- |
-| FFmpeg         | Sends video as SRT caller to MediaConnect          |
-| FastAPI        | Provides dashboard, control endpoints, and metrics |
-| Prometheus     | Scrapes FastAPI runtime metrics                    |
-| Grafana        | Visualizes Prometheus and CloudWatch metrics       |
-| CloudWatch     | Provides AWS Media Services metrics                |
-| Docker Compose | Runs FastAPI, Prometheus, and Grafana              |
+| Component      | Purpose                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| FFmpeg         | Sends the source video to AWS MediaConnect using SRT caller mode |
+| FastAPI        | Provides dashboard, runtime API, control endpoints, and metrics  |
+| Prometheus     | Scrapes FastAPI runtime metrics                                  |
+| Grafana        | Visualizes Prometheus and CloudWatch metrics                     |
+| CloudWatch     | Provides AWS Media Services metrics                              |
+| Docker Compose | Runs FastAPI, Prometheus, and Grafana together                   |
+
+## Prerequisites
+
+A fresh Ubuntu EC2 instance should have:
+
+* Git
+* Docker
+* Docker Compose
+* FFmpeg
+* curl
+* unzip
+
+The EC2 instance should also have the required security group rules for:
+
+* SSH
+* FastAPI dashboard
+* Prometheus
+* Grafana
+* SRT traffic, if applicable to the test setup
+
+The AWS Media Services infrastructure must be provisioned from the companion Terraform repository before FFmpeg can send traffic into MediaConnect.
 
 ## Fresh EC2 Setup
 
@@ -147,7 +188,7 @@ sudo usermod -aG docker ubuntu
 
 Log out and log back in after adding the `ubuntu` user to the Docker group.
 
-Clone the repository:
+Clone this repository:
 
 ```bash
 cd ~
@@ -161,7 +202,7 @@ Ensure scripts are executable:
 chmod +x scripts/*.sh
 ```
 
-Create required runtime directories if missing:
+The `logs/` and `data/` directories are included in the repository using `.gitkeep` files. If they are ever missing on a fresh EC2 instance, recreate them with:
 
 ```bash
 mkdir -p logs data
@@ -169,13 +210,35 @@ mkdir -p logs data
 
 ## Runtime Configuration
 
-After provisioning AWS Media Services from the Terraform repository, generate the runtime `.env` file there and copy it into:
+This repository requires a runtime `.env` file at:
 
 ```text
 source-ec2/.env
 ```
 
-The `.env` file should include values such as:
+The `.env` file is generated from Terraform outputs in the companion infrastructure repository.
+
+On the machine where the Terraform repository is managed:
+
+```bash
+cd terraform-aws-mediaservices
+./generate-runtime-env.ps1
+```
+
+Then copy the generated `.env` file to the EC2 instance running this repository:
+
+```bash
+scp -i /path/to/key.pem .env ubuntu@<EC2_PUBLIC_IP>:~/aws-media-pipeline-observability/source-ec2/.env
+```
+
+On the EC2 instance, verify the file:
+
+```bash
+cd ~/aws-media-pipeline-observability/source-ec2
+cat .env
+```
+
+Expected values include:
 
 ```text
 SRT_TARGET_IP=
@@ -184,6 +247,14 @@ SRT_LATENCY_MS=2000
 HLS_URL=
 DASH_URL=
 JWT_SECRET=
+```
+
+Do not commit the real `.env` file to GitHub.
+
+A template is provided at:
+
+```text
+source-ec2/.env.example
 ```
 
 ## Start the Runtime Stack
@@ -222,7 +293,7 @@ Username: admin
 Password: admin123
 ```
 
-## Start and Stop FFmpeg
+## FFmpeg Runtime Control
 
 Start FFmpeg:
 
@@ -237,7 +308,7 @@ Stop FFmpeg:
 ./scripts/stop_ffmpeg.sh
 ```
 
-Check status:
+Check FFmpeg and host status:
 
 ```bash
 ./scripts/status.sh
@@ -245,91 +316,17 @@ Check status:
 
 FFmpeg can also be controlled from the FastAPI dashboard using a valid admin JWT.
 
-## Metrics
+## FastAPI Endpoints
 
-Prometheus runtime metrics include:
-
-```text
-cpu_usage_percent
-memory_usage_percent
-ffmpeg_running
-ffmpeg_bitrate_kbps
-ffmpeg_speed
-srt_caller_process_active
-```
-
-CloudWatch/Grafana metrics include:
+Public endpoints:
 
 ```text
-MediaConnect SourceBitRate
-MediaConnect SourcePacketLossPercent
-MediaLive ActiveAlerts
-MediaLive InputVideoFrameRate
-MediaLive NetworkIn
-MediaPackage RequestCount
-MediaPackage egress-related metrics, when available
+GET /
+GET /dashboard
+GET /status
+GET /ffmpeg/status
+GET /metrics
 ```
-
-## Grafana Dashboard Design
-
-Recommended dashboard layout:
-
-```text
-Host Runtime Observability
-- EC2 CPU
-- EC2 memory
-- FFmpeg running
-- FFmpeg bitrate
-- FFmpeg speed
-- SRT caller process active
-```
-
-```text
-AWS Media Services Observability
-- MediaConnect metrics
-- MediaLive metrics
-- MediaPackage metrics
-```
-
-```text
-End-to-End Live Pipeline Demo
-- FFmpeg running
-- FFmpeg bitrate
-- MediaConnect source bitrate
-- MediaLive active alerts
-- MediaLive input frame rate
-- MediaPackage request count
-```
-
-## CloudWatch Access
-
-The EC2 instance should have an IAM role attached with CloudWatch read permissions.
-
-Recommended policy:
-
-```text
-CloudWatchReadOnlyAccess
-```
-
-Verify from EC2:
-
-```bash
-aws sts get-caller-identity
-aws cloudwatch list-metrics --region us-east-1 --max-items 5
-```
-
-Do not use long-lived AWS access keys on the EC2 instance. Use an IAM instance profile instead.
-
-## JWT Authentication and RBAC
-
-The FastAPI dashboard uses JWT authentication to protect administrative operations.
-
-Roles:
-
-| Role   | Access                                             |
-| ------ | -------------------------------------------------- |
-| admin  | Full operational access                            |
-| viewer | Read-only access; administrative operations denied |
 
 Protected admin endpoints:
 
@@ -339,16 +336,26 @@ POST /ffmpeg/stop
 GET  /runtime-config
 ```
 
-Public endpoints:
+## JWT Authentication and RBAC
 
-```text
-GET /
-GET /dashboard
-GET /health
-GET /status
-GET /ffmpeg/status
-GET /metrics
-```
+The FastAPI dashboard uses JWT authentication to protect administrative operations.
+
+Roles:
+
+| Role   | Access                                                 |
+| ------ | ------------------------------------------------------ |
+| admin  | Full operational access                                |
+| viewer | Read-only access; administrative operations are denied |
+
+Expected RBAC behavior:
+
+| Token         | Expected Result                       |
+| ------------- | ------------------------------------- |
+| No token      | 401 Unauthorized                      |
+| Invalid token | 401 Unauthorized                      |
+| Expired token | 401 Token expired                     |
+| Viewer token  | 403 Administrator privileges required |
+| Admin token   | Allowed for protected operations      |
 
 ## Generate Admin Token
 
@@ -408,60 +415,49 @@ print(jwt.encode(payload, secret, algorithm="HS256"))
 PY
 ```
 
-## Expected RBAC Behavior
+## Metrics
 
-| Token         | Expected Result                       |
-| ------------- | ------------------------------------- |
-| No token      | 401 Unauthorized                      |
-| Invalid token | 401 Unauthorized                      |
-| Expired token | 401 Token expired                     |
-| Viewer token  | 403 Administrator privileges required |
-| Admin token   | Allowed for protected operations      |
-
-## Demo Workflow
-
-1. Open the FastAPI dashboard.
+Prometheus runtime metrics include:
 
 ```text
-http://<EC2_PUBLIC_IP>:8000/dashboard
+cpu_usage_percent
+memory_usage_percent
+ffmpeg_running
+ffmpeg_bitrate_kbps
+ffmpeg_speed
+srt_caller_process_active
 ```
 
-2. Generate an admin JWT.
-
-3. Paste the token into the dashboard JWT field.
-
-4. Start FFmpeg.
-
-5. Verify:
+CloudWatch/Grafana metrics include:
 
 ```text
-FFmpeg running = 1
-FFmpeg bitrate rises
-MediaConnect source bitrate rises
-MediaLive active alerts drop
-MediaLive input frame rate appears
-HLS/DASH playback works
-MediaPackage request metrics move when playback starts
+MediaConnect SourceBitRate
+MediaConnect SourcePacketLossPercent
+MediaLive ActiveAlerts
+MediaLive InputVideoFrameRate
+MediaLive NetworkIn
+MediaPackage RequestCount
+MediaPackage egress-related metrics, when available
 ```
 
-6. Stop FFmpeg.
+## CloudWatch Access
 
-7. Verify:
+The EC2 instance should use an IAM instance profile with CloudWatch read permissions.
+
+Recommended managed policy:
 
 ```text
-FFmpeg running = 0
-MediaLive active alerts return
+CloudWatchReadOnlyAccess
 ```
 
-8. Generate a viewer JWT.
+Verify from EC2:
 
-9. Attempt protected operations.
-
-Expected result:
-
-```text
-Viewer token is blocked with 403 Forbidden.
+```bash
+aws sts get-caller-identity
+aws cloudwatch list-metrics --region us-east-1 --max-items 5
 ```
+
+Do not use long-lived AWS access keys on the EC2 instance.
 
 ## Useful Commands
 
@@ -471,7 +467,7 @@ Check containers:
 docker compose ps
 ```
 
-Restart services:
+Restart all services:
 
 ```bash
 docker compose restart
@@ -489,7 +485,7 @@ View FastAPI logs:
 docker logs metrics-api --tail 100
 ```
 
-View FFmpeg log:
+View FFmpeg logs:
 
 ```bash
 tail -f logs/ffmpeg.log
@@ -503,41 +499,43 @@ git status
 
 ## Cleanup Warning
 
+Use this for a normal stop:
+
+```bash
+docker compose down
+```
+
+Use this to start again:
+
+```bash
+docker compose up -d
+```
+
 Do not run this unless you intentionally want to delete Grafana and Prometheus stored data:
 
 ```bash
 docker compose down -v
 ```
 
-Use this for normal stop/start:
+## Documentation
 
-```bash
-docker compose down
-docker compose up -d
-```
+Additional documentation is available in the `docs/` directory.
+
+| Document                  | Purpose                                                         |
+| ------------------------- | --------------------------------------------------------------- |
+| `docs/architecture.md`    | Explains the end-to-end media pipeline and observability design |
+| `docs/deployment.md`      | Provides the full deployment and runtime procedure              |
+| `docs/troubleshooting.md` | Lists common issues, checks, and recovery steps                 |
 
 ## Current Status
 
-Completed:
+This runtime repository currently provides:
 
-* Host-managed FFmpeg
-* FastAPI dashboard
+* Host-managed FFmpeg streaming
+* FastAPI operations dashboard
 * Prometheus runtime metrics
-* Grafana dashboards
-* CloudWatch datasource
-* AWS Media Services metrics
+* Grafana visualization
+* CloudWatch datasource support
 * JWT authentication
-* RBAC
-* Dashboard provisioning
-* GitHub checkpoint
-
-Next documentation improvements should go under:
-
-```text
-docs/
-├── architecture.md
-├── deployment.md
-├── demo-guide.md
-├── troubleshooting.md
-└── screenshots/
-```
+* Admin and viewer RBAC
+* Deployment, architecture, and troubleshooting documentation

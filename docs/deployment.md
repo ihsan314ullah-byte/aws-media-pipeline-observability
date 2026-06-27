@@ -8,13 +8,13 @@ The AWS Media Services infrastructure (MediaConnect, MediaLive, MediaPackage, IA
 
 The runtime repository is responsible for:
 
-* Host-managed FFmpeg
-* FastAPI dashboard
-* Prometheus
-* Grafana
-* CloudWatch integration
-* JWT authentication
-* Role-Based Access Control (RBAC)
+- Host-managed FFmpeg
+- FastAPI dashboard
+- Prometheus
+- Grafana
+- CloudWatch integration
+- JWT authentication
+- Role-Based Access Control (RBAC)
 
 ---
 
@@ -22,22 +22,19 @@ The runtime repository is responsible for:
 
 Before deploying the runtime, ensure the following have already been completed:
 
-* Ubuntu 24.04 LTS EC2 instance
-* Security Group configured for:
-
-  * SSH (22)
-  * FastAPI (8000)
-  * Prometheus (9090)
-  * Grafana (3000)
-  * SRT traffic, if applicable
-* AWS Media Services provisioned using the Terraform repository
-* Runtime `.env` generated from the Terraform outputs
+- Ubuntu 24.04 LTS EC2 instance
+- Security Group configured for:
+  - SSH (22)
+  - FastAPI (8000)
+  - Prometheus (9090)
+  - Grafana (3000)
+  - SRT traffic (if applicable)
+- AWS Media Services provisioned using the Terraform repository
+- Runtime `.env` generated from the Terraform outputs
 
 ---
 
 # Install Required Packages
-
-Update the system:
 
 ```bash
 sudo apt update
@@ -60,17 +57,9 @@ Log out and log back in after adding the user to the Docker group.
 
 ```bash
 cd /tmp
-
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
-
 unzip -q awscliv2.zip
-
 sudo ./aws/install
-```
-
-Verify:
-
-```bash
 aws --version
 ```
 
@@ -78,15 +67,14 @@ aws --version
 
 # Attach IAM Role
 
-Attach an EC2 IAM role with at least:
+Attach an EC2 IAM role with:
 
-* CloudWatchReadOnlyAccess
+- CloudWatchReadOnlyAccess
 
 Verify:
 
 ```bash
 aws sts get-caller-identity
-
 aws cloudwatch list-metrics --region us-east-1 --max-items 5
 ```
 
@@ -96,9 +84,7 @@ aws cloudwatch list-metrics --region us-east-1 --max-items 5
 
 ```bash
 cd ~
-
 git clone https://github.com/ihsan314ullah-byte/aws-media-pipeline-observability.git
-
 cd aws-media-pipeline-observability/source-ec2
 ```
 
@@ -106,68 +92,58 @@ cd aws-media-pipeline-observability/source-ec2
 
 # Runtime Configuration
 
-Copy the generated runtime configuration into:
+Generate the runtime configuration from the Terraform repository:
 
-```text
-source-ec2/.env
+```powershell
+cd terraform-aws-mediaservices
+terraform apply
+.\generate-runtime-env.ps1
 ```
 
-Typical values include:
+Copy the generated `.env` file to the EC2 instance:
 
-```text
-SRT_TARGET_IP=
-SRT_TARGET_PORT=5000
-SRT_LATENCY_MS=2000
+```bash
+scp -i /path/to/key.pem .env ubuntu@<EC2_PUBLIC_IP>:~/aws-media-pipeline-observability/source-ec2/.env
+```
 
-HLS_URL=
-DASH_URL=
+Verify:
 
-JWT_SECRET=
+```bash
+cd ~/aws-media-pipeline-observability/source-ec2
+cat .env
 ```
 
 ---
 
 # Start the Runtime Stack
 
-From the `source-ec2` directory:
-
 ```bash
 docker compose up -d
-```
-
-Verify:
-
-```bash
 docker compose ps
 ```
 
-Expected services:
+Expected:
 
-* metrics-api
-* prometheus
-* grafana
+- metrics-api
+- prometheus
+- grafana
+
+---
+
+# Runtime Validation
+
+```bash
+curl http://localhost:8000/status
+curl http://localhost:8000/metrics
+```
 
 ---
 
 # Verify Services
 
-FastAPI Dashboard
-
-```text
-http://<EC2_PUBLIC_IP>:8000/dashboard
-```
-
-Prometheus
-
-```text
-http://<EC2_PUBLIC_IP>:9090
-```
-
-Grafana
-
-```text
-http://<EC2_PUBLIC_IP>:3000
-```
+- FastAPI: `http://<EC2_PUBLIC_IP>:8000/dashboard`
+- Prometheus: `http://<EC2_PUBLIC_IP>:9090`
+- Grafana: `http://<EC2_PUBLIC_IP>:3000`
 
 Default Grafana credentials:
 
@@ -180,21 +156,9 @@ Password: admin123
 
 # Start Streaming
 
-Start FFmpeg:
-
 ```bash
 ./scripts/start_ffmpeg.sh
-```
-
-Check status:
-
-```bash
 ./scripts/status.sh
-```
-
-Stop FFmpeg:
-
-```bash
 ./scripts/stop_ffmpeg.sh
 ```
 
@@ -202,44 +166,31 @@ Stop FFmpeg:
 
 # Verify the Pipeline
 
-When FFmpeg is running:
-
-* MediaConnect receives the SRT stream.
-* MediaLive processes the input.
-* MediaPackage publishes HLS/DASH endpoints.
-* Grafana displays runtime and AWS metrics.
+- MediaConnect receives the SRT stream.
+- MediaLive processes the input.
+- MediaPackage publishes HLS/DASH endpoints.
+- Grafana displays runtime and AWS metrics.
 
 ---
 
 # Operational Validation
 
-Verify the following:
-
-* FastAPI dashboard loads successfully.
-* Prometheus is scraping metrics.
-* Grafana shows Prometheus runtime metrics.
-* Grafana shows CloudWatch MediaConnect metrics.
-* Grafana shows CloudWatch MediaLive metrics.
-* MediaPackage request metrics update during playback.
-* HLS and DASH playback function correctly.
+- FastAPI dashboard loads.
+- Prometheus scrapes metrics.
+- Grafana displays Prometheus metrics.
+- Grafana displays CloudWatch metrics.
+- HLS/DASH playback succeeds.
 
 ---
 
 # Shutdown
 
-Stop FFmpeg:
-
 ```bash
 ./scripts/stop_ffmpeg.sh
-```
-
-Stop containers:
-
-```bash
 docker compose down
 ```
 
-To preserve Grafana dashboards and Prometheus data, **do not** use:
+Do **not** use:
 
 ```bash
 docker compose down -v
@@ -257,20 +208,29 @@ Infrastructure provisioning is maintained separately:
 terraform-aws-mediaservices
 ```
 
-The deployment flow is:
+The complete deployment workflow is:
 
 ```text
-Terraform Infrastructure
-        ↓
+terraform-aws-mediaservices
+        │
+        ▼
+Provision AWS Media Services
+        │
+        ▼
 Generate runtime .env
-        ↓
-Deploy Runtime Repository
-        ↓
-Start Docker Compose
-        ↓
+        │
+        ▼
+Copy .env to EC2
+        │
+        ▼
+Start Docker services
+        │
+        ▼
 Start FFmpeg
-        ↓
-Observe Metrics
-        ↓
-Validate HLS / DASH Playback
+        │
+        ▼
+Verify HLS/DASH playback
+        │
+        ▼
+Observe the pipeline with Prometheus, Grafana, and CloudWatch
 ```

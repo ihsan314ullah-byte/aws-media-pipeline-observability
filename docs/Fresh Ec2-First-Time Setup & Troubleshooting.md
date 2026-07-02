@@ -8,10 +8,10 @@ This section covers the most common issues encountered when deploying the projec
 
 The observability repository requires a runtime `.env` file generated from the Terraform outputs.
 
-From the Terraform repository:
+From the Terraform Repository/PC : for ex in my-case
 
 ```powershell
-cd C:\Users\<username>\Desktop\terraform-aws-mediaservices
+cd C:\Users\<username>\Desktop\terraform-aws-mediaconnect-lab
 
 Set-ExecutionPolicy -Scope Process Bypass
 
@@ -31,15 +31,11 @@ If PowerShell reports:
 ```
 Running scripts is disabled on this system
 ```
-
-run:
+then for the current PowerShell session, run:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 ```
-
-for the current PowerShell session.
-
 ---
 
 ## 2. Copy the Runtime `.env` to the EC2 Repository

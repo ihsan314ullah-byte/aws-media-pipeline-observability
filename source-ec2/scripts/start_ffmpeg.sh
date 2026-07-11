@@ -19,16 +19,15 @@ fi
 
 SRT_TARGET_IP="${SRT_TARGET_IP:-}"
 SRT_TARGET_PORT="${SRT_TARGET_PORT:-5000}"
-SRT_LATENCY_MS="${SRT_LATENCY_MS:-2000}"
-
+SRT_LATENCY_US="${SRT_LATENCY_US:-2000000}" # Earlier at FFmepg ec2 host SRT_LATENCY_MS=2000 was wrong, 
+# correct FFmpeg ec2 host latency is SRT_LATENCY_US=2000000xmicro sec= 2sec, AWS Mediaconnect min latency is a different thing,2000ms=2sec 
 if [ -z "$SRT_TARGET_IP" ]; then
     echo "ERROR: SRT_TARGET_IP is not set."
     echo "Create source-ec2/.env from source-ec2/.env.example and set Terraform output source_ingest_ip."
     exit 1
 fi
 
-SRT_TARGET="srt://${SRT_TARGET_IP}:${SRT_TARGET_PORT}?mode=caller&latency=${SRT_LATENCY_MS}"
-
+SRT_TARGET="srt://${SRT_TARGET_IP}:${SRT_TARGET_PORT}?mode=caller&latency=${SRT_LATENCY_US}"
 mkdir -p "$LOG_DIR"
 
 if [ ! -f "$VIDEO" ]; then

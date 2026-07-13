@@ -1,7 +1,13 @@
+# Global settings apply unless a scrape job overrides them.
 global:
+  # Poll frequently so start/stop and stream-health changes appear quickly.
   scrape_interval: 5s
 
+# Each scrape job defines one group of Prometheus targets.
 scrape_configs:
   - job_name: "metrics-api"
+
+    # Docker's internal DNS resolves the Compose service name metrics-api.
+    # Prometheus uses /metrics by default, matching the FastAPI endpoint.
     static_configs:
       - targets: ["metrics-api:8000"]

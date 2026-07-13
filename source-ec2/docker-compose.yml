@@ -1,18 +1,29 @@
+# Docker Compose runs the local operations API and the two observability tools.
 services:
   metrics-api:
+    # Build the custom FastAPI image from source-ec2/api/Dockerfile.
     build:
       context: ./api
     container_name: metrics-api
     restart: unless-stopped
+
+    # Publish the dashboard/API on the EC2 host.
     ports:
       - "8000:8000"
+
+    # Host PID mode makes the host's PID 1 and FFmpeg processes visible.
+    # Privileged mode is required for nsenter to join host namespaces.
     pid: "host"
     privileged: true
+
+    # Load JWT and generated media endpoint configuration.
     env_file:
       - .env
-
     environment:
       HOST_PROJECT_DIR: /home/ubuntu/aws-media-pipeline-observability/source-ec2
+
+    # Share runtime state with the host. Input/config mounts are read-only where
+    # the API only needs to inspect them.
     volumes:
       - ./logs:/app/logs
       - ./scripts:/app/scripts
@@ -20,6 +31,7 @@ services:
       - ./.env:/app/.env:ro
 
   prometheus:
+    # Prometheus periodically scrapes metrics-api:8000/metrics.
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
@@ -32,6 +44,7 @@ services:
       - metrics-api
 
   grafana:
+    # Grafana presents Prometheus and provisioned CloudWatch dashboards.
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
@@ -48,6 +61,7 @@ services:
     depends_on:
       - prometheus
 
+# Named volumes keep monitoring history and Grafana state across recreation.
 volumes:
   prometheus-data:
   grafana-data:

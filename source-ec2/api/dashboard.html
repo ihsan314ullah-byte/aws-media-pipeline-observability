@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
-
+  
 <head>
-  <!-- ===============================================================
+   <!-- ===============================================================
        PAGE METADATA
        ----------------------------------------------------------------
        Defines the document type, character encoding, page title, and
@@ -10,9 +10,7 @@
        =============================================================== -->
   <meta charset="UTF-8" />
   <title>Dashboard for AWS Media Pipeline</title>
-
   <style>
-
     /* ===============================================================
        GLOBAL PAGE STYLING
        ----------------------------------------------------------------
@@ -26,7 +24,7 @@
       margin: 0;
       padding: 24px;
     }
-
+    
     /* ===============================================================
        HERO SECTION
        ----------------------------------------------------------------
@@ -62,7 +60,7 @@
       line-height: 1.6;
       margin: 0;
     }
-
+    
     /* ===============================================================
        DASHBOARD GRID
        ----------------------------------------------------------------
@@ -126,7 +124,7 @@
       background: #b91c1c;
     }
 
-    /* ===============================================================
+     /* ===============================================================
        JWT TOKEN INPUT
        ----------------------------------------------------------------
        Stores the administrator JWT entered by the user. The browser
@@ -192,12 +190,10 @@
       border-radius: 8px;
       border-left: 4px solid #f97316;
     }
-
   </style>
 </head>
 
 <body>
-
   <!-- ===============================================================
        DASHBOARD HEADER
        ----------------------------------------------------------------
@@ -207,7 +203,6 @@
   <header class="hero">
     <h1>Dashboard for AWS Media Pipeline</h1>
     <h2>End-to-end Live Streaming</h2>
-
     <p>
       Architecture:
       <strong>FFmpeg (SRT-Caller)</strong> →
@@ -222,7 +217,7 @@
        DASHBOARD GRID
        =============================================================== -->
   <div class="grid">
-
+    
     <!-- =============================================================
          HOST STATUS CARD
 
@@ -230,37 +225,65 @@
          FFmpeg state together with EC2 runtime metrics.
          ============================================================= -->
     <div class="card">
-      ...
+      <h2>Host Source EC2 Metrics</h2>
+      <button onclick="loadStatus()">Refresh Status</button>
+      <pre id="statusBox">Click Refresh Status to load current EC2/FFmpeg status.</pre>
     </div>
 
-    <!-- =============================================================
+    <div class="card">
+
+      <!-- =============================================================
          FFMPEG CONTROL CARD
 
          Administrator-only controls. Every Start and Stop request
          includes a JWT Bearer token before the API allows execution.
          ============================================================= -->
-    <div class="card">
-      ...
+      <h2>FFmpeg / SRT Control</h2>
+      <p class="small warning">JWT required: protected controls start and stop host-managed FFmpeg.</p>
+
+      <input
+        id="jwtToken"
+        type="password"
+        placeholder="Paste JWT token here"
+        autocomplete="off"
+      />
+
+      <button onclick="startFfmpeg()">Start FFmpeg</button>
+      <button class="danger" onclick="stopFfmpeg()">Stop FFmpeg</button>
+      <button onclick="loadFfmpegStatus()">FFmpeg Status</button>
     </div>
 
-    <!-- =============================================================
+    <div class="card">
+
+      <!-- =============================================================
          OBSERVABILITY CARD
 
          Provides quick access to Prometheus metrics, Prometheus UI,
          and Grafana running on the same EC2 instance.
          ============================================================= -->
-    <div class="card">
-      ...
+      <h2>Monitoring Links</h2>
+      <p class="small warning">
+        JWT required: these dashboard buttons require the same token before opening Prometheus, Grafana, or metrics.
+      </p>
+      <button onclick="openProtectedLink('/metrics', 'Prometheus Metrics')">Open Prometheus Metrics</button>
+      <button onclick="openProtectedLink('http://' + window.location.hostname + ':9090', 'Prometheus')">Open Prometheus</button>
+      <button onclick="openProtectedLink('http://' + window.location.hostname + ':3000', 'Grafana')">Open Grafana</button>
     </div>
 
-    <!-- =============================================================
+    <div class="card">
+
+      <!-- =============================================================
          PLAYBACK CARD
 
          Retrieves protected runtime configuration and launches
          external HLS.js or DASH-IF reference players.
          ============================================================= -->
-    <div class="card">
-      ...
+      <h2>ABR Playback Endpoints</h2>
+      <p class="small warning">
+        JWT required: these buttons read protected runtime config before opening HLS/DASH players.
+      </p>
+      <button onclick="openHlsPlayer()">Open HLS in hls.js Player</button>
+      <button onclick="openDashPlayer()">Open DASH in DASH-IF Player</button>
     </div>
 
   </div>
@@ -282,7 +305,7 @@
     // warning, or error message.
     // ===============================================================
     function setMessage(message) {
-      ...
+      document.getElementById("messageBox").textContent = message;
     }
 
     // ===============================================================
@@ -291,7 +314,7 @@
     // Reads the administrator token entered into the password field.
     // ===============================================================
     function getToken() {
-      ...
+      return document.getElementById("jwtToken").value.trim();
     }
 
     // ===============================================================
@@ -302,7 +325,16 @@
     //      Authorization: Bearer <JWT>
     // ===============================================================
     function getAuthHeaders() {
-      ...
+      const token = getToken();
+
+      if (!token) {
+        setMessage("Unauthorized: JWT token is missing.");
+        throw new Error("JWT token is missing");
+      }
+
+      return {
+        "Authorization": `Bearer ${token}`
+      };
     }
 
     // ===============================================================
@@ -313,8 +345,23 @@
     //  • Detect HTTP errors
     //  • Display formatted success/error messages
     // ===============================================================
-    async function handleJsonResponse(...) {
-      ...
+    async function handleJsonResponse(response, successPrefix) {
+      let bodyText = await response.text();
+      let parsed;
+
+      try {
+        parsed = JSON.parse(bodyText);
+      } catch {
+        parsed = bodyText;
+      }
+
+      if (!response.ok) {
+        const details = typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2);
+        throw new Error(`${response.status} ${response.statusText}\n${details}`);
+      }
+
+      setMessage(`${successPrefix}\n${typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2)}`);
+      return parsed;
     }
 
     // ===============================================================
@@ -323,7 +370,14 @@
     // Calls GET /status and updates the metrics panel.
     // ===============================================================
     async function loadStatus() {
-      ...
+      try {
+        const response = await fetch("/status");
+        const data = await response.json();
+        document.getElementById("statusBox").textContent = JSON.stringify(data, null, 2);
+        setMessage("Status refreshed successfully.");
+      } catch (error) {
+        setMessage(`Status failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -333,7 +387,13 @@
     // the host-side Bash status script.
     // ===============================================================
     async function loadFfmpegStatus() {
-      ...
+      try {
+        const response = await fetch("/ffmpeg/status");
+        const data = await response.json();
+        setMessage(`FFmpeg status:\n${JSON.stringify(data, null, 2)}`);
+      } catch (error) {
+        setMessage(`FFmpeg status failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -343,7 +403,16 @@
     // FastAPI validates the JWT before executing the host script.
     // ===============================================================
     async function startFfmpeg() {
-      ...
+      try {
+        const response = await fetch("/ffmpeg/start", {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+
+        await handleJsonResponse(response, "Start request completed:");
+      } catch (error) {
+        setMessage(`Start failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -352,7 +421,16 @@
     // Sends an authenticated POST request to /ffmpeg/stop.
     // ===============================================================
     async function stopFfmpeg() {
-      ...
+      try {
+        const response = await fetch("/ffmpeg/stop", {
+          method: "POST",
+          headers: getAuthHeaders()
+        });
+
+        await handleJsonResponse(response, "Stop request completed:");
+      } catch (error) {
+        setMessage(`Stop failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -361,8 +439,14 @@
     // Requires a JWT before allowing users to navigate to internal
     // monitoring tools.
     // ===============================================================
-    function openProtectedLink(...) {
-      ...
+    function openProtectedLink(url, label) {
+      try {
+        getAuthHeaders();
+        setMessage(`Authorized. Opening ${label}:\n${url}`);
+        window.open(url, "_blank");
+      } catch (error) {
+        setMessage(`${label} failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -372,17 +456,49 @@
     // runtime configuration endpoint.
     // ===============================================================
     async function getRuntimeConfig() {
-      ...
+      const response = await fetch("/runtime-config", {
+        headers: getAuthHeaders()
+      });
+
+      let bodyText = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(bodyText);
+      } catch {
+        data = bodyText;
+      }
+
+      if (!response.ok) {
+        const details = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+        throw new Error(`${response.status} ${response.statusText}\n${details}`);
+      }
+
+      return data;
     }
 
-    // ===============================================================
+     // ===============================================================
     // OPEN HLS PLAYER
     // ---------------------------------------------------------------
     // Retrieves the generated HLS manifest URL and launches the
     // official hls.js demo player.
     // ===============================================================
     async function openHlsPlayer() {
-      ...
+      try {
+        const config = await getRuntimeConfig();
+        const hlsUrl = config.hls_url || config.HLS_URL;
+
+        if (!hlsUrl) {
+          setMessage("HLS URL is missing from runtime config.");
+          return;
+        }
+
+        const playerUrl = `https://hlsjs.video-dev.org/demo/?src=${encodeURIComponent(hlsUrl)}`;
+        setMessage(`Opening HLS player:\n${playerUrl}`);
+        window.open(playerUrl, "_blank");
+      } catch (error) {
+        setMessage(`HLS player failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -392,7 +508,21 @@
     // reference player.
     // ===============================================================
     async function openDashPlayer() {
-      ...
+      try {
+        const config = await getRuntimeConfig();
+        const dashUrl = config.dash_url || config.DASH_URL;
+
+        if (!dashUrl) {
+          setMessage("DASH URL is missing from runtime config.");
+          return;
+        }
+
+        const playerUrl = `https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=${encodeURIComponent(dashUrl)}`;
+        setMessage(`Opening DASH player:\n${playerUrl}`);
+        window.open(playerUrl, "_blank");
+      } catch (error) {
+        setMessage(`DASH player failed: ${error.message}`);
+      }
     }
 
     // ===============================================================
@@ -402,8 +532,6 @@
     // first opens so the user immediately sees the current state.
     // ===============================================================
     loadStatus();
-
   </script>
-
 </body>
 </html>
